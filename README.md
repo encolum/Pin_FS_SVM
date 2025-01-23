@@ -1,11 +1,18 @@
-[Paper] Feature Selection For SVM using Mixed Integer Linear Programming (Updating)
+[Paper] Optimal Robust Feature Selection For Support
+Vector Machines With Pinball Loss
 
 Keywords: Data Science, Outlier Detection, Feature Selection, Support Vector Machine, Mixed-Integer Linear Programming.
 
-This paper proposes a robust classification model based on Support Vector Machines (SVM) that simultaneously addresses both outlier detection and feature selection. The problem is formulated as a Mixed-Integer Linear Programming (MILP) 
-model. The selection of relevant features for defining the separating hyperplanes is 
-incorporated into the model through a budget constraint, which limits the number of 
-features, while the pinball loss function is used to detect outliers in the classification 
-process. We propose both exact and heuristic methods to solve this formulation
-efficiently. Finally, the model is validated using several well-known datasets and 
-compared with other models.
+Support Vector Machines (SVMs) have been widely
+used for classification tasks, but face significant challenges in-
+cluding sensitivity to noise and outliers, and the critical need
+for effective feature selection. This paper proposes a robust
+Mixed Integer Linear Programming (MILP) model based on
+Support Vector Machines (SVMs) that simultaneously addresses
+both issues. Our model, Pin-FS-SVM, incorporates a budget
+constraint to limit feature selection and employs the pinball
+loss function for noise and outlier handling in the classification
+process. Experiments on multiple datasets show that Pin-FS-SVM
+outperforms existing methods in robustness to noise and outliers,
+achieves better feature reduction, and maintains competitive
+performance.
