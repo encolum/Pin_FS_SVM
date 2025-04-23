@@ -1,5 +1,16 @@
-[Paper] Optimal Robust Feature Selection For Support
-Vector Machines With Pinball Loss
+# Optimal Robust Feature Selection For Support Vector Machines With Pinball Loss
+
+This repository contains the implementation of robust feature selection methods for Support Vector Machines using Pinball loss function. The code provides implementation for several models:
+
+- **Pin-FS-SVM**: Pinball Loss Feature Selection SVM
+- **MILP1**: Mixed Integer Linear Programming SVM
+- **Pinball SVM**: Standard SVM with Pinball Loss
+- **L1-SVM**: L1-norm SVM (sparse)
+- **L2-SVM**: Standard SVM with L2 regularization
+- **Fisher-SVM**: Fisher score-based feature selection with SVM
+- **RFE-SVM**: Recursive Feature Elimination with SVM
+
+## Project Structure
 
 Keywords: Data Science, Outlier Detection, Feature Selection, Support Vector Machine, Mixed-Integer Linear Programming.
 

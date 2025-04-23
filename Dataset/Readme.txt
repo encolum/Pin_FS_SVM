@@ -1,0 +1,6 @@
+PIMA Indian Diabetes: This dataset contains 768 samples, with 500 negative and 268 positive cases. It has 8 features, and the objective is to classify whether a patient has diabetes or not.
+Australian Credit: This dataset contains 690 samples, with 383 negative and 307 positive cases. It includes 14 features and relates to credit card applications.
+Cleveland: This dataset contains 304 samples, with 164 negative and 139 positive cases. It has 13 features, and the objective is to classify whether a person is suffering from heart disease or not.
+Breast Cancer Wisconsin: This dataset contains 569 samples, with 212 negative and 357 positive cases. It includes 30 features, and the objective is to classify whether the cancer is benign or malignant.
+Ionosphere: This dataset contains 351 samples, with 126 negative and 225 positive cases. It has 34 features, and the objective is to classify whether a radar's result is "good" or "bad."
+Sonar: This dataset contains 208 samples, with 97 negative and 111 positive cases. It includes 60 features, and the objective is to determine whether the object is a rock or metal.
