@@ -25,40 +25,40 @@ def load_dataset(dataset_name, dataset_type="original"):
     
     dataset_paths = {
         'wdbc': {
-            'original': os.path.join(base_dir, 'wdbc', 'wdbc.data.txt'),
-            'noise': os.path.join(base_dir, 'wdbc', 'wdbc_noisy_label_feature.txt'),
-            'outlier': os.path.join(base_dir, 'wdbc', 'wdbc_noisy_label_outlier.txt'),
-            'both': os.path.join(base_dir, 'wdbc', 'wdbc_both_noise_outlier.txt')
+            'original': os.path.join(base_dir, 'Dataset', 'wdbc.data.txt'),
+            'noise': os.path.join(base_dir, 'Dataset', 'wdbc_noisy_label_feature.txt'),
+            'outlier': os.path.join(base_dir, 'Dataset', 'wdbc_noisy_label_outlier.txt'),
+            'both': os.path.join(base_dir, 'Dataset', 'wdbc_both_noise_outlier.txt')
         },
         'diabetes': {
-            'original': os.path.join(base_dir, 'diabetes', 'diabetes.csv'),
-            'noise': os.path.join(base_dir, 'diabetes', 'diabetes_noise_label_feature.csv'),
-            'outlier': os.path.join(base_dir, 'diabetes', 'diabetes_outlier.csv'),
-            'both': os.path.join(base_dir, 'diabetes', 'diabetes_both_noise_outlier.csv')
+            'original': os.path.join(base_dir, 'Dataset', 'diabetes.csv'),
+            'noise': os.path.join(base_dir, 'Dataset', 'diabetes_noise_label_feature.csv'),
+            'outlier': os.path.join(base_dir, 'Dataset', 'diabetes_outlier.csv'),
+            'both': os.path.join(base_dir, 'Dataset', 'diabetes_both_noise_outlier.csv')
         },
         'cleveland': {
-            'original': os.path.join(base_dir, 'cleveland', 'Heart_disease_cleveland_new.csv'),
-            'noise': os.path.join(base_dir, 'cleveland', 'clevaland_noise_label_feature.csv'),
-            'outlier': os.path.join(base_dir, 'cleveland', 'clevaland_outlier.csv'),
-            'both': os.path.join(base_dir, 'cleveland', 'cleveland_both_noise_outlier.csv')
+            'original': os.path.join(base_dir, 'Dataset', 'Heart_disease_cleveland_new.csv'),
+            'noise': os.path.join(base_dir, 'Dataset', 'clevaland_noise_label_feature.csv'),
+            'outlier': os.path.join(base_dir, 'Dataset', 'clevaland_outlier.csv'),
+            'both': os.path.join(base_dir, 'Dataset', 'cleveland_both_noise_outlier.csv')
         },
         'ionosphere': {
-            'original': os.path.join(base_dir, 'ionosphere', 'ionosphere.data'),
-            'noise': os.path.join(base_dir, 'ionosphere', 'ionosphere_noise_label_feature.txt'),
-            'outlier': os.path.join(base_dir, 'ionosphere', 'ionosphere_outlier.txt'),
-            'both': os.path.join(base_dir, 'ionosphere', 'ionosphere_both_noise_outlier.txt')
+            'original': os.path.join(base_dir, 'Dataset', 'ionosphere.data'),
+            'noise': os.path.join(base_dir, 'Dataset', 'ionosphere_noise_label_feature.txt'),
+            'outlier': os.path.join(base_dir, 'Dataset', 'ionosphere_outlier.txt'),
+            'both': os.path.join(base_dir, 'Dataset', 'ionosphere_both_noise_outlier.txt')
         },
         'sonar': {
-            'original': os.path.join(base_dir, 'sonar', 'sonar.txt'),
-            'noise': os.path.join(base_dir, 'sonar', 'sonar_noise_label_feature.txt'),
-            'outlier': os.path.join(base_dir, 'sonar', 'sonar_outlier.txt'),
-            'both': os.path.join(base_dir, 'sonar', 'sonar_both_noise_outlier.txt')
+            'original': os.path.join(base_dir, 'Dataset', 'sonar.txt'),
+            'noise': os.path.join(base_dir, 'Dataset', 'sonar_noise_label_feature.txt'),
+            'outlier': os.path.join(base_dir, 'Dataset', 'sonar_outlier.txt'),
+            'both': os.path.join(base_dir, 'Dataset', 'sonar_both_noise_outlier.txt')
         },
         'australia': {
-            'original': os.path.join(base_dir, 'australia', 'australia.txt'),
-            'noise': os.path.join(base_dir, 'australia', 'australia_noise_label_feature.txt'),
-            'outlier': os.path.join(base_dir, 'australia', 'australia_outlier.txt'),
-            'both': os.path.join(base_dir, 'australia', 'australia_both_noise_outlier.txt')
+            'original': os.path.join(base_dir, 'Dataset', 'australia.txt'),
+            'noise': os.path.join(base_dir, 'Dataset', 'australia_noise_label_feature.txt'),
+            'outlier': os.path.join(base_dir, 'Dataset', 'australia_outlier.txt'),
+            'both': os.path.join(base_dir, 'Dataset', 'australia_both_noise_outlier.txt')
         }
     }
     
@@ -116,3 +116,17 @@ def load_dataset(dataset_name, dataset_type="original"):
         
         # Return empty data as fallback
         return np.array([]), np.array([])
+
+if __name__ == "__main__":
+    # Example usage
+    dataset_name = 'wdbc'
+    dataset_type = 'original'
+    
+    X, y = load_dataset(dataset_name, dataset_type)
+    
+    if X.size > 0 and y.size > 0:
+        print(f"Loaded {dataset_name} ({dataset_type}) dataset successfully.")
+        print(f"Feature matrix shape: {X.shape}")
+        print(f"Target labels shape: {y.shape}")
+    else:
+        print("Failed to load the dataset.")

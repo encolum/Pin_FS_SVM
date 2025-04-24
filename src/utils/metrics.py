@@ -1,5 +1,5 @@
 import numpy as np
-from sklearn.metrics import accuracy_score, roc_auc_score, balanced_accuracy_score, confusion_matrix
+from sklearn.metrics import accuracy_score, roc_auc_score, balanced_accuracy_score, confusion_matrix, f1_score
 
 def evaluate_model(y_true, y_pred, y_score=None):
     """
@@ -25,27 +25,33 @@ def evaluate_model(y_true, y_pred, y_score=None):
     acc = accuracy_score(y_true, y_pred)
     balanced_acc = balanced_accuracy_score(y_true, y_pred)
     
+    # Calculate F1-score
+    f1 = f1_score(y_true, y_pred, average='binary')
+    
     # Handle binary AUC calculation
     try:
         auc = roc_auc_score(y_true, y_score)
     except Exception:
-        auc = 0.5  # Default for cases where AUC can't be calculated
+        auc = 0  # Default for cases where AUC can't be calculated
     
     # Calculate confusion matrix elements
     try:
         tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
         sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0
         specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+        
+        # Calculate G-mean
+        g_mean = np.sqrt(sensitivity * specificity) if (sensitivity * specificity) > 0 else 0
     except ValueError:
         sensitivity = 0
         specificity = 0
+        g_mean = 0
     
     return {
         'accuracy': acc,
-        'balanced_accuracy': balanced_acc,
         'auc': auc,
-        'sensitivity': sensitivity,
-        'specificity': specificity
+        'f1_score': f1,
+        'g_mean': g_mean
     }
 
 def count_selected_features(w):
