@@ -1,14 +1,13 @@
 import numpy as np
 import time
-from sklearn.svm import SVC
+from docplex.mp.model import Model
 
 class L2SVM:
     """
-    Standard L2-regularized Support Vector Machine
-    Wrapper around sklearn's SVC
+    Standard L2-regularized Support Vector Machine using DOCPLEX
     """
     
-    def __init__(self, C=1.0, kernel='linear', time_limit=None):
+    def __init__(self, C= None, time_limit=None):
         """
         Initialize L2-SVM model
         
@@ -16,22 +15,18 @@ class L2SVM:
         -----------
         C : float
             Regularization parameter
-        kernel : str
-            Kernel type ('linear', 'rbf', 'poly', etc.)
         time_limit : int or None
-            Time limit for optimization (not used by sklearn)
+            Time limit for optimization in seconds
         """
         self.C = C
-        self.kernel = kernel
         self.time_limit = time_limit
-        self.model = None
         self.w = None
         self.b = None
         self.train_time = None
     
     def fit(self, X, y):
         """
-        Fit the L2-SVM model
+        Fit the L2-SVM model using DOCPLEX
         
         Parameters:
         -----------
@@ -46,18 +41,41 @@ class L2SVM:
         """
         start_time = time.time()
         
-        # Initialize and fit SVM
-        self.model = SVC(C=self.C, kernel=self.kernel, probability=True)
-        self.model.fit(X, y)
+        # Initialize model
+        opt_mod = Model(name='L2-SVM')
         
-        # For linear kernel, extract weights and bias
-        if self.kernel == 'linear':
-            self.w = self.model.coef_[0]
-            self.b = self.model.intercept_[0]
+        # Get dimensions
+        m, n = X.shape
+        
+        # Define decision variables
+        w = opt_mod.continuous_var_list(n, name='w')
+        b = opt_mod.continuous_var(name='b')
+        xi = opt_mod.continuous_var_list(m, lb=0, name='xi')
+        
+        # Define objective function
+        opt_mod.minimize(0.5 * opt_mod.sum(w[j] ** 2 for j in range(n)) + 
+                         self.C * opt_mod.sum(xi[i] for i in range(m)))
+        
+        # Add constraints
+        for i in range(m):
+            opt_mod.add_constraint(y[i] * (opt_mod.sum(w[j] * X[i, j] for j in range(n)) + b) >= 1 - xi[i])
+        
+        # Set time limit if specified
+        if self.time_limit is not None:
+            opt_mod.set_time_limit(self.time_limit)
+        
+        # Solve the model
+        solution = opt_mod.solve()
+        
+        if solution:
+            # Extract weights and bias
+            self.w = np.array([solution.get_value(w[j]) for j in range(n)])
+            self.b = solution.get_value(b)
         else:
-            # For non-linear kernels, we don't have explicit weights
-            self.w = np.zeros(X.shape[1])
-            self.b = self.model.intercept_[0]
+            # Handle the case when no solution is found
+            self.w = np.zeros(n)
+            self.b = 0
+            print("Warning: No solution found for L2-SVM")
         
         self.train_time = time.time() - start_time
         return self
@@ -76,34 +94,15 @@ class L2SVM:
         numpy array
             Predicted labels (-1/1)
         """
-        if self.model is None:
+        if self.w is None:
             raise ValueError("Model not fitted yet")
         
-        return self.model.predict(X)
-    
-    def decision_function(self, X):
-        """
-        Calculate decision function scores
-        
-        Parameters:
-        -----------
-        X : numpy array
-            Feature matrix
-        
-        Returns:
-        --------
-        numpy array
-            Decision function scores
-        """
-        if self.model is None:
-            raise ValueError("Model not fitted yet")
-        
-        return self.model.decision_function(X)
+        return np.sign(np.dot(X, self.w) + self.b)
     
     def get_selected_features(self):
         """
         Get indices of selected features
-        For L2-SVM all features are typically used
+        For L2-SVM, features with non-zero coefficients are selected
         
         Returns:
         --------
@@ -113,12 +112,8 @@ class L2SVM:
         if self.w is None:
             raise ValueError("Model not fitted yet")
         
-        if self.kernel == 'linear':
-            # For linear kernel, features with non-zero coefficients
-            return [j + 1 for j in range(len(self.w)) if abs(self.w[j]) > 1e-6]
-        else:
-            # For non-linear kernels, we don't have explicit feature selection
-            return list(range(1, len(self.w) + 1))
+        # Return indices of features with non-zero weights (1-indexed)
+        return [j + 1 for j in range(len(self.w)) if abs(self.w[j]) > 1e-6]
     
     def get_num_selected_features(self):
         """

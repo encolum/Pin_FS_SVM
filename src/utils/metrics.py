@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.metrics import accuracy_score, roc_auc_score, balanced_accuracy_score, confusion_matrix, f1_score
 
-def evaluate_model(y_true, y_pred, y_score=None):
+def evaluate_model(y_true, y_pred):
     """
     Evaluate model performance using multiple metrics
     
@@ -11,16 +11,11 @@ def evaluate_model(y_true, y_pred, y_score=None):
         True labels
     y_pred : numpy array
         Predicted labels
-    y_score : numpy array, optional
-        Predicted scores for ROC AUC calculation
-        
-    Returns:
+    Returns
     --------
     dict
         Dictionary containing evaluation metrics
     """
-    if y_score is None:
-        y_score = y_pred
         
     acc = accuracy_score(y_true, y_pred)
     balanced_acc = balanced_accuracy_score(y_true, y_pred)
@@ -30,7 +25,7 @@ def evaluate_model(y_true, y_pred, y_score=None):
     
     # Handle binary AUC calculation
     try:
-        auc = roc_auc_score(y_true, y_score)
+        auc = roc_auc_score(y_true, y_pred)
     except Exception:
         auc = 0  # Default for cases where AUC can't be calculated
     
@@ -73,7 +68,7 @@ def count_selected_features(w):
     if w is None:
         return 0, []
         
-    selected_indices = np.where(np.abs(w) > 1e-6)[0]
+    selected_indices = np.where(np.abs(w) != 0)[0]
     selected_features = [i + 1 for i in selected_indices]
     return len(selected_features), selected_features
 
