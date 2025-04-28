@@ -6,7 +6,7 @@ from sklearn.model_selection import KFold
 from sklearn.preprocessing import StandardScaler
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-from src.utils.data_loader import load_dataset
+from src.utils.data_loader import load_dataset, get_shape
 from src.utils.preprocessing import standardize_data
 from src.utils.metrics import evaluate_model, count_selected_features, feature_selection_stability
 from src.models.l1_svm import L1SVM
@@ -374,68 +374,70 @@ def run_experiment(models_config, datasets_config, output_dir='results'):
 
 
 if __name__ == '__main__':
+# Datasets to test
+    data_config = [
+        {
+            'dataset_name': 'ionosphere',
+            'dataset_types': ['original', 'noise', 'outlier', 'both']
+        }
+    ]
+    m, n = get_shape(data_config[0]['dataset_name'])
+    print(f"Dataset shape: {m} samples, {n} features")
     # Define models with parameter grids to test
     models_config = [
-        {
-            'model_class': L1SVM,
-            'param_grid': {
-                'C': [2**i for i in range(-3, 6)]  # C from 2^-3 to 2^5
-            }
-        },
-        {
-            'model_class': L2SVM,
-            'param_grid': {
-                'C': [2**i for i in range(-3, 6)]  # C from 2^-3 to 2^5
-            }
-        },
-        {
-            'model_class': MILP1,
-            'param_grid': {
-                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-                'B': [i for i in range(1, 31)]       # B is max number of features
-            }
-        },
-        {
-            'model_class': PinFSSVM,
-            'param_grid': {
-                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-                'tau': [0.1, 0.5, 1.0],            # Pinball loss parameter
-                'B': [i for i in range(1, 31)]       # B is max number of features
-            },
-            'fixed_params': {
-                'time_limit': 60  # Add a time limit to prevent very long runs
-            }
-        },
-        {
-            'model_class': PinballSVM,
-            'param_grid': {
-                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-                'tau': [0.1, 0.5, 1.0]             # Pinball loss parameter
-            }
-        },
+        # {
+        #     'model_class': L1SVM,
+        #     'param_grid': {
+        #         'C': [2**i for i in range(-3, 6)]  # C from 2^-3 to 2^5
+        #     }
+        # },
+        # {
+        #     'model_class': L2SVM,
+        #     'param_grid': {
+        #         'C': [2**i for i in range(-3, 6)]  # C from 2^-3 to 2^5
+        #     }
+        # },
+        # {
+        #     'model_class': MILP1,
+        #     'param_grid': {
+        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+        #         'B': [i for i in range(1, n+1)]       # B is max number of features
+        #     }
+        # },
+        # {
+        #     'model_class': PinFSSVM,
+        #     'param_grid': {
+        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+        #         'tau': [0.1, 0.5, 1.0],            # Pinball loss parameter
+        #         'B': [i for i in range(1, n+1)]       # B is max number of features
+        #     },
+        #     'fixed_params': {
+        #         'time_limit': 60  # Add a time limit to prevent very long runs
+        #     }
+        # },
+        # {
+        #     'model_class': PinballSVM,
+        #     'param_grid': {
+        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+        #         'tau': [0.1, 0.5, 1.0]             # Pinball loss parameter
+        #     }
+        # },
         {
             'model_class': FisherSVM,
             'param_grid': {
                 'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-                'n_features': [i for i in range(1, 31)]  # Number of features to select
+                # 'n_features': [int(n/8), int(n/4), int(n/2), n]  # Number of features to select
             }
         },
-        {
-            'model_class': RFESVM,
-            'param_grid': {
-                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-                'n_features': [i for i in range(1, 31)]  # Number of features to select
-            }
-        }
+        # {
+        #     'model_class': RFESVM,
+        #     'param_grid': {
+        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+        #         'n_features': [int(n/8), int(n/4), int(n/2), n]  # Number of features to select
+        #     }
+        # }
     ]
-    
-    # Datasets to test
-    data_config = [
-        {
-            'dataset_name': 'wdbc',
-            'dataset_types': ['original', 'noise', 'outlier', 'both']
-        }
-    ]
+
     
     # Run experiments
     results = run_experiment(models_config, data_config, output_dir='results')

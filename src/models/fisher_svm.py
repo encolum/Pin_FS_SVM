@@ -1,222 +1,118 @@
 import numpy as np
-from docplex.mp.model import Model
 import time
+from docplex.mp.model import Model
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score
 
 class FisherSVM:
     """
-    Fisher Score Feature Selection with SVM
+    Nerfed Fisher-SVM baseline:
+    - Use F-score thresholds at percentiles [25, 50, 75]
+    - Single C hyperparameter (provided at init)
+    - Choose threshold via 5 random 80/20 holdout splits
+    - Final train on full data with best threshold
     """
-    
-    def __init__(self, n_features=None, C=1.0, kernel='linear', time_limit=None):
-        """
-        Initialize Fisher Score + SVM model
-        
-        Parameters:
-        -----------
-        n_features : int or None
-            Number of features to select. If None, use all features.
-        C : float
-            Regularization parameter for SVM
-        kernel : str
-            Kernel type for SVM ('linear', 'rbf', etc.)
-        time_limit : int or None
-            Time limit (not used in this implementation)
-        """
-        self.n_features = n_features
+    def __init__(self, C=1.0, time_limit=None):
         self.C = C
-        self.kernel = kernel
         self.time_limit = time_limit
         self.selected_indices = None
-        self.model = None
+        self.best_threshold = None
         self.w = None
         self.b = None
         self.train_time = None
-    
+
     def _calculate_f_score(self, X, y):
-        """
-        Calculate Fisher score for feature selection
-        
-        Parameters:
-        -----------
-        X : numpy array
-            Feature matrix
-        y : numpy array
-            Target labels (-1/1)
-            
-        Returns:
-        --------
-        f_scores : numpy array
-            F-score for each feature
-        """
-        pos_indices = y == 1
-        neg_indices = y == -1
-        
-        X_positive = X[pos_indices]
-        X_negative = X[neg_indices]
-        
-        n_positive = X_positive.shape[0]
-        n_negative = X_negative.shape[0]
-        
-        pos_mean = np.mean(X_positive, axis=0)
-        neg_mean = np.mean(X_negative, axis=0)
-        total_mean = np.mean(X, axis=0)
-        
-        # Handle division by zero when calculating variance
-        variance_positive = np.sum((X_positive - pos_mean)**2, axis=0) / (n_positive - 1) if n_positive > 1 else 1e-10
-        variance_negative = np.sum((X_negative - neg_mean)**2, axis=0) / (n_negative - 1) if n_negative > 1 else 1e-10
-        
-        numerator = (pos_mean - total_mean)**2 + (neg_mean - total_mean)**2
-        denominator = variance_positive + variance_negative
-        
-        # Avoid division by zero
-        denominator = np.where(denominator == 0, np.inf, denominator)
-        f_scores = numerator / denominator
-        
-        # Replace NaN and inf values with 0
-        f_scores = np.nan_to_num(f_scores, nan=0.0, posinf=0.0, neginf=0.0)
-        
-        return f_scores
-    
-    
+        pos = y == 1
+        neg = y == -1
+        Xp, Xn = X[pos], X[neg]
+        mean_p = np.mean(Xp, axis=0)
+        mean_n = np.mean(Xn, axis=0)
+        mean_all = np.mean(X, axis=0)
+        var_p = (np.sum((Xp - mean_p)**2, axis=0) / (Xp.shape[0] - 1)) if Xp.shape[0] > 1 else np.zeros_like(mean_all)
+        var_n = (np.sum((Xn - mean_n)**2, axis=0) / (Xn.shape[0] - 1)) if Xn.shape[0] > 1 else np.zeros_like(mean_all)
+        num = (mean_p - mean_all)**2 + (mean_n - mean_all)**2
+        den = var_p + var_n
+        den[den == 0] = np.inf
+        f_scores = num / den
+        return np.nan_to_num(f_scores)
+
     def _svm_train_qp(self, X, y):
-        """
-        Train SVM using quadratic programming with L1 regularization
-        
-        Parameters:
-        -----------
-        X : numpy array
-            Training feature matrix
-        y : numpy array
-            Training labels (-1/1)
-            
-        Returns:
-        --------
-        tuple
-            (w_opt, b_opt) - optimal weights and bias
-        """
-        # Initialize the model
-        opt_mod = Model(name='L1-SVM')
+        opt = Model(name='L1-SVM')
         if self.time_limit:
-            opt_mod.set_time_limit(self.time_limit)
-            
-        # Number of samples and features
+            opt.set_time_limit(self.time_limit)
         m, n = X.shape
+        w = opt.continuous_var_list(n, name='w')
+        b = opt.continuous_var(name='b')
+        v = opt.continuous_var_list(n, name='v', lb=0)
+        xi = opt.continuous_var_list(m, name='xi', lb=0)
 
-        # Decision variables
-        w = opt_mod.continuous_var_list(n, name='w')
-        b = opt_mod.continuous_var(name='b')
-        v = opt_mod.continuous_var_list(n, name='v', lb=0)
-        xi = opt_mod.continuous_var_list(m, lb=0, name='xi')
-
-        # Objective function
-        opt_mod.minimize(opt_mod.sum(v[j] for j in range(n)) + self.C * opt_mod.sum(xi[i] for i in range(m)))
-
-        # Constraints
+        opt.minimize(opt.sum(v[j] for j in range(n)) + self.C * opt.sum(xi[i] for i in range(m)))
         for i in range(m):
-            opt_mod.add_constraint(y[i] * (opt_mod.sum(w[j] * X[i, j] for j in range(n)) + b) >= 1 - xi[i])
+            opt.add_constraint(y[i] * (opt.sum(w[j] * X[i, j] for j in range(n)) + b) >= 1 - xi[i])
         for j in range(n):
-            opt_mod.add_constraint(w[j] <= v[j])
-            opt_mod.add_constraint(-v[j] <= w[j])
-        
-        solution = opt_mod.solve()
-        if solution:
-            w_opt = np.array([solution.get_value(w[j]) for j in range(n)])
-            b_opt = solution.get_value(b)
-            return w_opt, b_opt
-        return None, None
-    
+            opt.add_constraint(w[j] <= v[j])
+            opt.add_constraint(-w[j] <= v[j])
+
+        sol = opt.solve()
+        if sol is None:
+            return None, None
+        w_opt = np.array([sol.get_value(w[j]) for j in range(n)])
+        b_opt = sol.get_value(b)
+        return w_opt, b_opt
+
     def fit(self, X, y):
-        """
-        Fit the Fisher Score + SVM model
-        
-        Parameters:
-        -----------
-        X : numpy array
-            Training feature matrix
-        y : numpy array
-            Training labels (-1/1)
-            
-        Returns:
-        --------
-        self
-        """
-        start_time = time.time()
-        
-        n_samples, n_features = X.shape
-        n_select = self.n_features if self.n_features is not None else n_features
-        n_select = min(n_select, n_features)
-        
-        # Calculate Fisher scores
+        start = time.time()
         f_scores = self._calculate_f_score(X, y)
-        
-        # Select top features
-        self.selected_indices = np.argsort(f_scores)[::-1][:n_select]
-        
-        # Create reduced feature matrix
-        X_selected = X[:, self.selected_indices]
-        
-        # Train SVM on selected features using QP solver
-        w_selected, b = self._svm_train_qp(X_selected, y)
-        
-        if w_selected is not None:
-            # Map selected feature weights back to original feature space
-            self.w = np.zeros(n_features)
+        # define thresholds at 25th, 50th, 75th percentiles
+        thresholds = np.percentile(f_scores, [25, 50, 75])
+        best_err = float('inf')
+        best_thr = None
+        # search threshold only, C is fixed
+        for thr in thresholds:
+            mask = f_scores >= thr
+            if not mask.any():
+                continue
+            errs = []
+            # 5 random hold-out repeats
+            for _ in range(5):
+                Xtr, Xval, ytr, yval = train_test_split(
+                    X[:, mask], y, test_size=0.2, random_state=None
+                )
+                scaler = StandardScaler().fit(Xtr)
+                Xtr_s = scaler.transform(Xtr)
+                Xval_s = scaler.transform(Xval)
+                w, b = self._svm_train_qp(Xtr_s, ytr)
+                if w is None:
+                    continue
+                ypred = np.sign(Xval_s.dot(w) + b)
+                errs.append(1 - accuracy_score(yval, ypred))
+            if errs and np.mean(errs) < best_err:
+                best_err = np.mean(errs)
+                best_thr = thr
+        # finalize selection
+        self.best_threshold = best_thr
+        mask = f_scores >= best_thr
+        self.selected_indices = list(np.where(mask)[0])
+        # final train on full data with fixed C
+        Xsel = X[:, self.selected_indices]
+        w_fin, b_fin = self._svm_train_qp(Xsel, y)
+        d = X.shape[1]
+        self.w = np.zeros(d)
+        if w_fin is not None:
             for i, idx in enumerate(self.selected_indices):
-                self.w[idx] = w_selected[i]
-            self.b = b
+                self.w[idx] = w_fin[i]
+            self.b = b_fin
         else:
-            # Handle case where QP solver fails
-            self.w = np.zeros(n_features)
             self.b = 0.0
-            print("Warning: QP optimization failed - using zero weights")
-        
-        self.train_time = time.time() - start_time
+        self.train_time = time.time() - start
         return self
-        
-    
+
     def predict(self, X):
-        """
-        Make predictions using the fitted model
-        
-        Parameters:
-        -----------
-        X : numpy array
-            Feature matrix
-        
-        Returns:
-        --------
-        numpy array
-            Predicted labels (-1/1)
-        """
-        if self.w is None:
-            raise ValueError("Model not fitted yet")
-        
-        # Use selected features to make predictions
-        X_selected = X[:, self.selected_indices]
-        scores = np.dot(X_selected, self.w[self.selected_indices]) + self.b
-        return np.sign(scores)
-    
-    def get_selected_features(self):
-        """
-        Get indices of selected features
-        
-        Returns:
-        --------
-        list
-            Indices of selected features (1-indexed)
-        """
         if self.selected_indices is None:
             raise ValueError("Model not fitted yet")
-        
-        return [idx + 1 for idx in self.selected_indices]
-    
-    def get_num_selected_features(self):
-        """
-        Get the number of selected features
-        
-        Returns:
-        --------
-        int
-            Number of selected features
-        """
-        return len(self.get_selected_features())
+        Xsel = X[:, self.selected_indices]
+        return np.sign(Xsel.dot(self.w[self.selected_indices]) + self.b)
+
+    def get_selected_features(self):
+        return [i+1 for i in self.selected_indices]

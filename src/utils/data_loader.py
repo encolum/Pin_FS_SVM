@@ -116,6 +116,20 @@ def load_dataset(dataset_name, dataset_type="original"):
         
         # Return empty data as fallback
         return np.array([]), np.array([])
+    
+def get_shape(dataset_name, dataset_type="original"):
+
+    """
+    Get the shape of the dataset
+    
+    Parameters:
+    -----------
+    dataset_name : str
+        Name of the dataset ('wdbc', 'diabetes', 'cleveland', 'ionosphere', 'sonar', 'australia')
+    """
+    
+    X, y = load_dataset(dataset_name, dataset_type)
+    return X.shape[0], X.shape[1]
 
 if __name__ == "__main__":
     # Example usage
