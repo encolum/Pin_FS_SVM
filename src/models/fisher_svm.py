@@ -1,6 +1,6 @@
 import numpy as np
+from docplex.mp.model import Model
 import time
-from sklearn.svm import SVC
 
 class FisherSVM:
     """
@@ -77,6 +77,54 @@ class FisherSVM:
         
         return f_scores
     
+    
+    def _svm_train_qp(self, X, y):
+        """
+        Train SVM using quadratic programming with L1 regularization
+        
+        Parameters:
+        -----------
+        X : numpy array
+            Training feature matrix
+        y : numpy array
+            Training labels (-1/1)
+            
+        Returns:
+        --------
+        tuple
+            (w_opt, b_opt) - optimal weights and bias
+        """
+        # Initialize the model
+        opt_mod = Model(name='L1-SVM')
+        if self.time_limit:
+            opt_mod.set_time_limit(self.time_limit)
+            
+        # Number of samples and features
+        m, n = X.shape
+
+        # Decision variables
+        w = opt_mod.continuous_var_list(n, name='w')
+        b = opt_mod.continuous_var(name='b')
+        v = opt_mod.continuous_var_list(n, name='v', lb=0)
+        xi = opt_mod.continuous_var_list(m, lb=0, name='xi')
+
+        # Objective function
+        opt_mod.minimize(opt_mod.sum(v[j] for j in range(n)) + self.C * opt_mod.sum(xi[i] for i in range(m)))
+
+        # Constraints
+        for i in range(m):
+            opt_mod.add_constraint(y[i] * (opt_mod.sum(w[j] * X[i, j] for j in range(n)) + b) >= 1 - xi[i])
+        for j in range(n):
+            opt_mod.add_constraint(w[j] <= v[j])
+            opt_mod.add_constraint(-v[j] <= w[j])
+        
+        solution = opt_mod.solve()
+        if solution:
+            w_opt = np.array([solution.get_value(w[j]) for j in range(n)])
+            b_opt = solution.get_value(b)
+            return w_opt, b_opt
+        return None, None
+    
     def fit(self, X, y):
         """
         Fit the Fisher Score + SVM model
@@ -107,23 +155,24 @@ class FisherSVM:
         # Create reduced feature matrix
         X_selected = X[:, self.selected_indices]
         
-        # Train SVM on selected features
-        self.model = SVC(C=self.C, kernel=self.kernel)
-        self.model.fit(X_selected, y)
+        # Train SVM on selected features using QP solver
+        w_selected, b = self._svm_train_qp(X_selected, y)
         
-        # Extract weights for linear kernel
-        if self.kernel == 'linear':
-            w_selected = self.model.coef_[0]
+        if w_selected is not None:
+            # Map selected feature weights back to original feature space
             self.w = np.zeros(n_features)
             for i, idx in enumerate(self.selected_indices):
                 self.w[idx] = w_selected[i]
-            self.b = self.model.intercept_[0]
+            self.b = b
         else:
+            # Handle case where QP solver fails
             self.w = np.zeros(n_features)
-            self.b = self.model.intercept_[0]
+            self.b = 0.0
+            print("Warning: QP optimization failed - using zero weights")
         
         self.train_time = time.time() - start_time
         return self
+        
     
     def predict(self, X):
         """
@@ -139,31 +188,13 @@ class FisherSVM:
         numpy array
             Predicted labels (-1/1)
         """
-        if self.model is None:
+        if self.w is None:
             raise ValueError("Model not fitted yet")
         
+        # Use selected features to make predictions
         X_selected = X[:, self.selected_indices]
-        return self.model.predict(X_selected)
-    
-    def decision_function(self, X):
-        """
-        Calculate decision function scores
-        
-        Parameters:
-        -----------
-        X : numpy array
-            Feature matrix
-        
-        Returns:
-        --------
-        numpy array
-            Decision function scores
-        """
-        if self.model is None:
-            raise ValueError("Model not fitted yet")
-        
-        X_selected = X[:, self.selected_indices]
-        return self.model.decision_function(X_selected)
+        scores = np.dot(X_selected, self.w[self.selected_indices]) + self.b
+        return np.sign(scores)
     
     def get_selected_features(self):
         """

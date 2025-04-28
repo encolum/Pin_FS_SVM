@@ -100,25 +100,7 @@ class L1SVM:
         
         scores = np.dot(X, self.w) + self.b
         return np.sign(scores)
-    
-    def decision_function(self, X):
-        """
-        Calculate decision function scores
-        
-        Parameters:
-        -----------
-        X : numpy array
-            Feature matrix
-        
-        Returns:
-        --------
-        numpy array
-            Decision function scores
-        """
-        if self.w is None:
-            raise ValueError("Model not fitted yet")
-        
-        return np.dot(X, self.w) + self.b
+
     
     def get_selected_features(self):
         """

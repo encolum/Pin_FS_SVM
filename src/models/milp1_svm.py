@@ -8,7 +8,7 @@ class MILP1:
     Mixed Integer Linear Programming SVM 1 (MILP1) - feature selection SVM based on L1-norm
     """
     
-    def __init__(self, B=None, C=1.0, l_bound=-2, u_bound=2, time_limit=None):
+    def __init__(self, B=None, C=None, l_bound=-2, u_bound=2, time_limit=None):
         """
         Initialize MILP1 model
         
