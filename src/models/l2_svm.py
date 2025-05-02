@@ -113,7 +113,7 @@ class L2SVM:
             raise ValueError("Model not fitted yet")
         
         # Return indices of features with non-zero weights (1-indexed)
-        return [j + 1 for j in range(len(self.w)) if abs(self.w[j]) > 1e-6]
+        return [j + 1 for j in range(len(self.w)) if abs(self.w[j]) > 1e-3]
     
     def get_num_selected_features(self):
         """

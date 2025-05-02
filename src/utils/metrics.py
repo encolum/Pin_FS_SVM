@@ -21,7 +21,7 @@ def evaluate_model(y_true, y_pred):
     balanced_acc = balanced_accuracy_score(y_true, y_pred)
     
     # Calculate F1-score
-    f1 = f1_score(y_true, y_pred, average='binary')
+    f1 = f1_score(y_true, y_pred, average='weighted')
     
     # Handle binary AUC calculation
     try:
@@ -68,7 +68,7 @@ def count_selected_features(w):
     if w is None:
         return 0, []
         
-    selected_indices = np.where(np.abs(w) != 0)[0]
+    selected_indices = np.where(np.abs(w) > 1e-3)[0]
     selected_features = [i + 1 for i in selected_indices]
     return len(selected_features), selected_features
 

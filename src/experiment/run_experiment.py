@@ -124,7 +124,7 @@ def process_best_results(model_class, dataset_name, dataset_type, best_params, b
     # Get final selected features
     if best_w is not None:
         n_features = len(best_w)
-        final_selected_features = [j + 1 for j in range(n_features) if abs(best_w[j]) > 1e-6]
+        final_selected_features = [j + 1 for j in range(n_features) if abs(best_w[j]) > 1e-3]
     else:
         final_selected_features = [f for f, freq in frequent_features if freq > 0.5]
     
@@ -364,7 +364,7 @@ def run_experiment(models_config, datasets_config, output_dir='results'):
     # Convert to DataFrame and save
     results_df = pd.DataFrame(all_results)
     timestamp = time.strftime("%Y%m%d-%H%M%S")
-    results_path = os.path.join(output_dir, f'experiment_results_{timestamp}.csv')
+    results_path = os.path.join(output_dir, f'experiment_results_{dataset_name}_{timestamp}.csv')
     results_df.to_csv(results_path, index=False)
     
     print(f"\nSummary results saved to {results_path}")
@@ -377,7 +377,7 @@ if __name__ == '__main__':
 # Datasets to test
     data_config = [
         {
-            'dataset_name': 'ionosphere',
+            'dataset_name': 'diabetes',
             'dataset_types': ['original', 'noise', 'outlier', 'both']
         }
     ]
@@ -404,17 +404,15 @@ if __name__ == '__main__':
         #         'B': [i for i in range(1, n+1)]       # B is max number of features
         #     }
         # },
-        # {
-        #     'model_class': PinFSSVM,
-        #     'param_grid': {
-        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-        #         'tau': [0.1, 0.5, 1.0],            # Pinball loss parameter
-        #         'B': [i for i in range(1, n+1)]       # B is max number of features
-        #     },
-        #     'fixed_params': {
-        #         'time_limit': 60  # Add a time limit to prevent very long runs
-        #     }
-        # },
+        {
+            'model_class': PinFSSVM,
+            'param_grid': {
+                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+                'tau': [0.1, 0.5, 1.0],            # Pinball loss parameter
+                'B': [i for i in range(1, n+1)]       # B is max number of features
+            },
+    
+        },
         # {
         #     'model_class': PinballSVM,
         #     'param_grid': {
@@ -422,18 +420,18 @@ if __name__ == '__main__':
         #         'tau': [0.1, 0.5, 1.0]             # Pinball loss parameter
         #     }
         # },
-        {
-            'model_class': FisherSVM,
-            'param_grid': {
-                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-                # 'n_features': [int(n/8), int(n/4), int(n/2), n]  # Number of features to select
-            }
-        },
+        # {
+        #     'model_class': FisherSVM,
+        #     'param_grid': {
+        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+               
+        #     }
+        # },
         # {
         #     'model_class': RFESVM,
         #     'param_grid': {
         #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-        #         'n_features': [int(n/8), int(n/4), int(n/2), n]  # Number of features to select
+        #         'n_features': [n]  # Number of features to select
         #     }
         # }
     ]

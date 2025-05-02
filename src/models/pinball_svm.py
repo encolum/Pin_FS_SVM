@@ -130,7 +130,7 @@ class PinballSVM:
         if self.w is None:
             raise ValueError("Model not fitted yet")
         
-        return [j + 1 for j in range(len(self.w)) if self.w[j] != 0]
+        return [j + 1 for j in range(len(self.w)) if abs(self.w[j]) > 1e-3]
     
     def get_num_selected_features(self):
         """

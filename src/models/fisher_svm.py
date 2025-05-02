@@ -7,9 +7,8 @@ from sklearn.metrics import accuracy_score
 
 class FisherSVM:
     """
-    Nerfed Fisher-SVM baseline:
+    Fisher-SVM baseline:
     - Use F-score thresholds at percentiles [25, 50, 75]
-    - Single C hyperparameter (provided at init)
     - Choose threshold via 5 random 80/20 holdout splits
     - Final train on full data with best threshold
     """
