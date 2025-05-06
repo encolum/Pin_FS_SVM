@@ -1,0 +1,5 @@
+Model,Type of model, Average Accuracy , Average AUC ,Average F1 Score,Average G-Mean,Average train_time,Average num_features,BestFold Features selected,BestFold #Features,C
+FisherSVM,Not noise, 0.7292 , 0.7425 ,0.735103353,0.739752661,1.113217092,4.5,"1, 2, 6, 7, 8",5,32
+FisherSVM,Noise, 0.7169 , 0.7357 ,0.725500425,0.732558401,1.077699709,5,"1, 2, 5, 6, 7, 8",6,1
+FisherSVM,Outlier, 0.6922 , 0.7077 ,0.703503327,0.70559218,1.092708182,4.5,"1, 2, 6, 8",4,8
+FisherSVM,Noise + Outlier, 0.6649 , 0.6780 ,0.675515373,0.676008926,1.078323388,4.4,"1, 2, 6, 8",4,0.5

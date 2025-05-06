@@ -36,7 +36,7 @@ class FisherSVM:
         f_scores = num / den
         return np.nan_to_num(f_scores)
 
-    def _svm_train_qp(self, X, y):
+    def _svm_train(self, X, y):
         opt = Model(name='L1-SVM')
         if self.time_limit:
             opt.set_time_limit(self.time_limit)
@@ -67,7 +67,6 @@ class FisherSVM:
         thresholds = np.percentile(f_scores, [25, 50, 75])
         best_err = float('inf')
         best_thr = None
-        # search threshold only, C is fixed
         for thr in thresholds:
             mask = f_scores >= thr
             if not mask.any():
@@ -78,13 +77,10 @@ class FisherSVM:
                 Xtr, Xval, ytr, yval = train_test_split(
                     X[:, mask], y, test_size=0.2, random_state=None
                 )
-                scaler = StandardScaler().fit(Xtr)
-                Xtr_s = scaler.transform(Xtr)
-                Xval_s = scaler.transform(Xval)
-                w, b = self._svm_train_qp(Xtr_s, ytr)
+                w, b = self._svm_train(Xtr, ytr)
                 if w is None:
                     continue
-                ypred = np.sign(Xval_s.dot(w) + b)
+                ypred = np.sign(Xval.dot(w) + b)
                 errs.append(1 - accuracy_score(yval, ypred))
             if errs and np.mean(errs) < best_err:
                 best_err = np.mean(errs)
@@ -93,9 +89,9 @@ class FisherSVM:
         self.best_threshold = best_thr
         mask = f_scores >= best_thr
         self.selected_indices = list(np.where(mask)[0])
-        # final train on full data with fixed C
+        # final train on full data
         Xsel = X[:, self.selected_indices]
-        w_fin, b_fin = self._svm_train_qp(Xsel, y)
+        w_fin, b_fin = self._svm_train(Xsel, y)
         d = X.shape[1]
         self.w = np.zeros(d)
         if w_fin is not None:

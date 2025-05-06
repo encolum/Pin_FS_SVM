@@ -9,7 +9,7 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from src.utils.data_loader import load_dataset, get_shape
 from src.utils.preprocessing import standardize_data
-from src.utils.metrics import evaluate_model, count_selected_features, feature_selection_stability
+from src.utils.metrics import evaluate_model, count_selected_features
 from src.models.l1_svm import L1SVM
 from src.models.l2_svm import L2SVM
 from src.models.milp1_svm import MILP1
@@ -388,7 +388,7 @@ if __name__ == '__main__':
 # Datasets to test
     data_config = [
         {
-            'dataset_name': 'sonar',
+            'dataset_name': 'wdbc',
             'dataset_types': ['original', 'noise', 'outlier', 'both']
         }
     ]
@@ -396,53 +396,53 @@ if __name__ == '__main__':
     print(f"Dataset shape: {m} samples, {n} features")
     # Define models with parameter grids to test
     models_config = [
-        {
-            'model_class': L1SVM,
-            'param_grid': {
-                'C': [2**i for i in range(-3, 6)]  # C from 2^-3 to 2^5
-            }
-        },
-        {
-            'model_class': L2SVM,
-            'param_grid': {
-                'C': [2**i for i in range(-3, 6)]  # C from 2^-3 to 2^5
-            }
-        },
-        {
-            'model_class': MILP1,
-            'param_grid': {
-                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-                'B': [i for i in range(1, n+1)]       # B is max number of features
-            }
-        },
-        {
-            'model_class': PinFSSVM,
-            'param_grid': {
-                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-                'tau': [0.1, 0.5, 1.0],            # Pinball loss parameter
-                'B': [i for i in range(1, n+1)]       # B is max number of features
-            },
+        # {
+        #     'model_class': L1SVM,
+        #     'param_grid': {
+        #         'C': [2**i for i in range(-3, 6)]  # C from 2^-3 to 2^5
+        #     }
+        # },
+        # {
+        #     'model_class': L2SVM,
+        #     'param_grid': {
+        #         'C': [2**i for i in range(-3, 6)]  # C from 2^-3 to 2^5
+        #     }
+        # },
+        # {
+        #     'model_class': MILP1,
+        #     'param_grid': {
+        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+        #         'B': [i for i in range(1, n+1)]       # B is max number of features
+        #     }
+        # },
+        # {
+        #     'model_class': PinFSSVM,
+        #     'param_grid': {
+        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+        #         'tau': [0.1, 0.5, 1.0],            # Pinball loss parameter
+        #         'B': [i for i in range(1, n+1)]       # B is max number of features
+        #     },
     
-        },
-        {
-            'model_class': PinballSVM,
-            'param_grid': {
-                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-                'tau': [0.1, 0.5, 1.0]             # Pinball loss parameter
-            }
-        },
-        {
-            'model_class': FisherSVM,
-            'param_grid': {
-                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+        # },
+        # {
+        #     'model_class': PinballSVM,
+        #     'param_grid': {
+        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+        #         'tau': [0.1, 0.5, 1.0]             # Pinball loss parameter
+        #     }
+        # },
+        # {
+        #     'model_class': FisherSVM,
+        #     'param_grid': {
+        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
                
-            }
-        },
+        #     }
+        # },
         {
             'model_class': RFESVM,
             'param_grid': {
                 'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-                'n_features': [n]  # Number of features to select
+                'n_features': [n//4,n//2,int(3*n/4)]  # Number of features to select
             }
         }
     ]
