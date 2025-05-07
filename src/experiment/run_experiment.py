@@ -76,7 +76,10 @@ def run_cv_for_params(model_class, params, X, y, kf):
             
             # Store feature selection info
             cv_metrics['train_time'].append(model.train_time)
-            num_features, selected_features = count_selected_features(model.w)
+            if model.__class__ == L2SVM or model.__class__ == PinballSVM:
+                num_features, selected_features = model.w.shape[0], list(range(1, model.w.shape[0] + 1))
+            else:
+                num_features, selected_features = count_selected_features(model.w)
             cv_metrics['num_features'].append(num_features)
             cv_selected_features.append(selected_features)
             
@@ -98,7 +101,7 @@ def run_cv_for_params(model_class, params, X, y, kf):
 
 def process_best_results(model_class, dataset_name, dataset_type, best_params, best_mean_cv_auc, 
                          best_mean_cv_accuracy, best_cv_f1_score, best_cv_g_mean, best_cv_metrics, best_all_selected_features, 
-                         best_w, n_splits):
+                         best_w, best_model, n_splits):
     """Process the best results from parameter grid search"""
     
     # Determine noise type
@@ -124,8 +127,11 @@ def process_best_results(model_class, dataset_name, dataset_type, best_params, b
     
     # Get final selected features
     if best_w is not None:
-        n_features = len(best_w)
-        final_selected_features = [j + 1 for j in range(n_features) if abs(best_w[j]) > 1e-3]
+        if model_class == L2SVM or model_class == PinballSVM:
+            final_selected_features = [j + 1 for j in range(len(best_w))]
+        else:
+            n_features = len(best_w)
+            final_selected_features = [j + 1 for j in range(n_features) if abs(best_w[j]) > 1e-3]
     else:
         final_selected_features = [f for f, freq in frequent_features if freq > 0.5]
     
@@ -292,7 +298,7 @@ def run_grid_search(model_class, param_values, dataset_name, dataset_type,
         result, frequent_features, final_selected_features = process_best_results(
             model_class, dataset_name, dataset_type, best_params, 
             best_mean_cv_auc, best_mean_cv_accuracy, best_mean_cv_f1_score, best_mean_cv_g_mean, best_cv_metrics,
-            best_all_selected_features, best_w, n_splits
+            best_all_selected_features, best_w, best_model, n_splits
         )
         
         # Save detailed metrics
@@ -375,7 +381,7 @@ def run_experiment(models_config, datasets_config, output_dir='results'):
     # Convert to DataFrame and save
     results_df = pd.DataFrame(all_results)
     timestamp = datetime.today().date()
-    results_path = os.path.join(output_dir, f'experiment_results_{dataset_name}_{timestamp}.csv')
+    results_path = os.path.join(output_dir, f'experiment_results_{dataset_name}_{timestamp}_L1.csv')
     results_df.to_csv(results_path, index=False)
     
     print(f"\nSummary results saved to {results_path}")
@@ -388,7 +394,7 @@ if __name__ == '__main__':
 # Datasets to test
     data_config = [
         {
-            'dataset_name': 'wdbc',
+            'dataset_name': 'diabetes',
             'dataset_types': ['original', 'noise', 'outlier', 'both']
         }
     ]
@@ -402,12 +408,12 @@ if __name__ == '__main__':
         #         'C': [2**i for i in range(-3, 6)]  # C from 2^-3 to 2^5
         #     }
         # },
-        # {
-        #     'model_class': L2SVM,
-        #     'param_grid': {
-        #         'C': [2**i for i in range(-3, 6)]  # C from 2^-3 to 2^5
-        #     }
-        # },
+        {
+            'model_class': L2SVM,
+            'param_grid': {
+                'C': [2**i for i in range(-3, 6)]  # C from 2^-3 to 2^5
+            }
+        },
         # {
         #     'model_class': MILP1,
         #     'param_grid': {
@@ -424,27 +430,27 @@ if __name__ == '__main__':
         #     },
     
         # },
+        {
+            'model_class': PinballSVM,
+            'param_grid': {
+                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+                'tau': [0.1, 0.5, 1.0]             # Pinball loss parameter
+            }
+        },
         # {
-        #     'model_class': PinballSVM,
-        #     'param_grid': {
-        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-        #         'tau': [0.1, 0.5, 1.0]             # Pinball loss parameter
-        #     }
-        # },
-        # {
-        #     'model_class': FisherSVM,
+        #      'model_class': FisherSVM,
         #     'param_grid': {
         #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
                
         #     }
         # },
-        {
-            'model_class': RFESVM,
-            'param_grid': {
-                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-                'n_features': [n//4,n//2,int(3*n/4)]  # Number of features to select
-            }
-        }
+        # {
+        #     'model_class': RFESVM,
+        #     'param_grid': {
+        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+        #         'n_features': [n//4,n//2,int(3*n/4)]  # Number of features to select
+        #     }
+        # }
     ]
 
     
