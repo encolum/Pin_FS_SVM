@@ -43,7 +43,7 @@ class RFESVM:
 
         sol = opt_mod.solve()
         
-        # Initialize model
+        # # Initialize model
         # opt_mod = Model(name='L2-SVM')
         
         # # Get dimensions

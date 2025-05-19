@@ -3,7 +3,7 @@ import time
 import numpy as np
 from datetime import datetime
 import pandas as pd
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, StratifiedKFold
 from sklearn.preprocessing import StandardScaler
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -17,6 +17,7 @@ from src.models.pin_fs_svm import PinFSSVM
 from src.models.pinball_svm import PinballSVM
 from src.models.fisher_svm import FisherSVM
 from src.models.rfe_svm import RFESVM
+import matplotlib.pyplot as plt 
 
 
 def run_cv_for_params(model_class, params, X, y, kf):
@@ -48,6 +49,10 @@ def run_cv_for_params(model_class, params, X, y, kf):
     }
     cv_selected_features = []
     last_model = None
+    best_fold_auc_single = -1
+    best_fold_model_single = None
+    best_fold_num_features_single = 0
+    best_fold_selected_features_single = []
     
     # Perform cross-validation
     for fold_idx, (train_idx, test_idx) in enumerate(kf.split(X)):
@@ -73,15 +78,24 @@ def run_cv_for_params(model_class, params, X, y, kf):
             # Store metrics
             for key in fold_metrics:
                 cv_metrics[key].append(fold_metrics[key])
-            
+            num_features_current_fold = 0
+            selected_features_current_fold = []
             # Store feature selection info
-            cv_metrics['train_time'].append(model.train_time)
+            
             if model.__class__ == L2SVM or model.__class__ == PinballSVM:
-                num_features, selected_features = model.w.shape[0], list(range(1, model.w.shape[0] + 1))
+                num_features_current_fold, selected_features_current_fold = model.w.shape[0], list(range(1, model.w.shape[0] + 1))
             else:
-                num_features, selected_features = count_selected_features(model.w)
-            cv_metrics['num_features'].append(num_features)
-            cv_selected_features.append(selected_features)
+                num_features_current_fold, selected_features_current_fold = count_selected_features(model.w)
+            cv_metrics['train_time'].append(model.train_time)
+            cv_metrics['num_features'].append(num_features_current_fold)
+            cv_selected_features.append(selected_features_current_fold)
+            
+            current_fold_auc = fold_metrics['auc']
+            if current_fold_auc > best_fold_auc_single:
+                best_fold_auc_single = current_fold_auc
+                best_fold_model_single = model
+                best_fold_num_features_single = num_features_current_fold
+                best_fold_selected_features_single = selected_features_current_fold
             
         except Exception as e:
             param_str = ", ".join([f"{k}={v}" for k, v in params.items()])
@@ -93,14 +107,17 @@ def run_cv_for_params(model_class, params, X, y, kf):
         return None
     
     return {
-        'metrics': cv_metrics,
-        'selected_features': cv_selected_features,
-        'last_model': last_model
+        'metrics': cv_metrics, #metrics for all folds
+        'selected_features_all_folds': cv_selected_features, #selected features for all folds
+        'last_model': last_model, #model of the last fold
+        'best_performing_fold_model': best_fold_model_single, #best performing fold model
+        'best_performing_fold_num_features': best_fold_num_features_single, #best performing fold number of features
+        'best_performing_fold_selected_features': best_fold_selected_features_single #best performing fold selected features
     }
 
 
 def process_best_results(model_class, dataset_name, dataset_type, best_params, best_mean_cv_auc, 
-                         best_mean_cv_accuracy, best_cv_f1_score, best_cv_g_mean, best_cv_metrics, best_all_selected_features, 
+                         best_mean_cv_accuracy, best_cv_f1_score, best_cv_g_mean, best_cv_metrics_all_folds, best_all_selected_features_all_folds, 
                          best_w, best_model, n_splits):
     """Process the best results from parameter grid search"""
     
@@ -115,7 +132,7 @@ def process_best_results(model_class, dataset_name, dataset_type, best_params, b
     
     # Calculate feature frequency
     feature_freq = {}
-    for features in best_all_selected_features:
+    for features in best_all_selected_features_all_folds:
         for f in features:
             if f not in feature_freq:
                 feature_freq[f] = 0
@@ -124,21 +141,21 @@ def process_best_results(model_class, dataset_name, dataset_type, best_params, b
     # Most frequently selected features
     frequent_features = sorted([(f, freq/n_splits) for f, freq in feature_freq.items()], 
                              key=lambda x: x[1], reverse=True)
-    
+        
     # Get final selected features
     if best_w is not None:
         if model_class == L2SVM or model_class == PinballSVM:
-            final_selected_features = [j + 1 for j in range(len(best_w))]
+            selected_features_best_fold = [j + 1 for j in range(len(best_w))]
         else:
             n_features = len(best_w)
-            final_selected_features = [j + 1 for j in range(n_features) if abs(best_w[j]) > 1e-3]
+            selected_features_best_fold = [j + 1 for j in range(n_features) if abs(best_w[j]) > 1e-3]
     else:
-        final_selected_features = [f for f, freq in frequent_features if freq > 0.5]
+        selected_features_best_fold = [f for f, freq in frequent_features if freq > 0.5]
     
     # Prepare result dictionary
     result = {
         'Model': model_class.__name__,
-        'Type of model': noise_type,
+        'Type of dataset': noise_type,
         'Average Accuracy': best_mean_cv_accuracy,
         'Average AUC': best_mean_cv_auc,
         'Average F1 Score': best_cv_f1_score,
@@ -146,15 +163,15 @@ def process_best_results(model_class, dataset_name, dataset_type, best_params, b
     }
     
     # Add time and feature count
-    for key in best_cv_metrics:
+    for key in best_cv_metrics_all_folds:
         if key in ['train_time', 'num_features']:
-            result[f'Average {key}'] = np.mean(best_cv_metrics[key])
+            result[f'Average {key}'] = np.mean(best_cv_metrics_all_folds[key])
             # result[f'Std {key}'] = np.std(best_cv_metrics[key])
             
     
     # Add feature selection information
-    result['BestFold Features selected'] = ', '.join(map(str, final_selected_features))
-    result['BestFold #Features'] = len(final_selected_features)
+    result['BestFold Features selected'] = ', '.join(map(str, selected_features_best_fold))
+    result['BestFold #Features'] = len(selected_features_best_fold)
     
     # Add best parameters
     for param_name, param_value in best_params.items():
@@ -164,12 +181,12 @@ def process_best_results(model_class, dataset_name, dataset_type, best_params, b
     param_str = ", ".join([f"{k}={v}" for k, v in best_params.items()])
     print(f"  Best parameters: {param_str}")
     print(f"  Accuracy={best_mean_cv_accuracy:.4f}, AUC={best_mean_cv_auc:.4f}, F1={best_cv_f1_score:.4f}, G-Mean={best_cv_g_mean:.4f}")
-    print(f"  Average #Features: {np.mean(best_cv_metrics['num_features']):.2f}")
-    print(f"  BestFold Features selected: {final_selected_features}")
-    print(f"  BestFold Number of selected features: {len(final_selected_features)}")
+    print(f"  Average #Features: {np.mean(best_cv_metrics_all_folds['num_features']):.2f}")
+    print(f"  BestFold Features selected: {selected_features_best_fold}")
+    print(f"  BestFold Number of selected features: {len(selected_features_best_fold)}")
     print('-' * 80)
     
-    return result, frequent_features, final_selected_features
+    return result, frequent_features, selected_features_best_fold
 
 
 def save_detailed_metrics(model_class, dataset_name, dataset_type, all_param_metrics, 
@@ -201,6 +218,7 @@ def save_detailed_metrics(model_class, dataset_name, dataset_type, all_param_met
             metrics_df.at[fold_idx, 'selected_features'] = str(features)
         
         metrics_df.to_csv(detailed_file, index=False)
+
 
 
 def run_grid_search(model_class, param_values, dataset_name, dataset_type, 
@@ -243,6 +261,7 @@ def run_grid_search(model_class, param_values, dataset_name, dataset_type,
     best_all_selected_features = []
     best_w = None
     best_model = None
+    best_model_overall_best_fold = None
     all_param_metrics = {}
     
     # Generate all parameter combinations
@@ -277,7 +296,7 @@ def run_grid_search(model_class, param_values, dataset_name, dataset_type,
             # Store metrics for this parameter set
             all_param_metrics[param_key] = {
                 'metrics': cv_metrics,
-                'selected_features': cv_results['selected_features']
+                'selected_features': cv_results['selected_features_all_folds']
             }
             
             # Update best if better
@@ -288,13 +307,19 @@ def run_grid_search(model_class, param_values, dataset_name, dataset_type,
                 best_mean_cv_f1_score = mean_f1_score
                 best_mean_cv_g_mean = mean_g_mean
                 best_cv_metrics = cv_metrics
-                best_all_selected_features = cv_results['selected_features']
-                if cv_results['last_model']:
-                    best_w = cv_results['last_model'].w
-                    best_model = cv_results['last_model']
+                best_all_selected_features = cv_results['selected_features_all_folds']
+                
+                best_model_overall_best_fold = cv_results['best_performing_fold_model']
+                num_features_overall_best_fold = cv_results['best_performing_fold_num_features']
+                best_selected_features_overall_best_fold = cv_results['best_performing_fold_selected_features']
     
     # Process best results
     if best_params:
+        best_w = None
+        if best_model_overall_best_fold:
+            best_w = best_model_overall_best_fold.w
+            best_model = best_model_overall_best_fold
+            
         result, frequent_features, final_selected_features = process_best_results(
             model_class, dataset_name, dataset_type, best_params, 
             best_mean_cv_auc, best_mean_cv_accuracy, best_mean_cv_f1_score, best_mean_cv_g_mean, best_cv_metrics,
@@ -381,7 +406,7 @@ def run_experiment(models_config, datasets_config, output_dir='results'):
     # Convert to DataFrame and save
     results_df = pd.DataFrame(all_results)
     timestamp = datetime.today().date()
-    results_path = os.path.join(output_dir, f'experiment_results_{dataset_name}_{timestamp}_L1.csv')
+    results_path = os.path.join(output_dir, f'experiment_results_{dataset_name}_{timestamp}_L1_updated_plot.csv')
     results_df.to_csv(results_path, index=False)
     
     print(f"\nSummary results saved to {results_path}")
@@ -402,34 +427,34 @@ if __name__ == '__main__':
     print(f"Dataset shape: {m} samples, {n} features")
     # Define models with parameter grids to test
     models_config = [
-        # {
-        #     'model_class': L1SVM,
-        #     'param_grid': {
-        #         'C': [2**i for i in range(-3, 6)]  # C from 2^-3 to 2^5
-        #     }
-        # },
+        {
+            'model_class': L1SVM,
+            'param_grid': {
+                'C': [2**i for i in range(-3, 6)]  # C from 2^-3 to 2^5
+            }
+        },
         {
             'model_class': L2SVM,
             'param_grid': {
                 'C': [2**i for i in range(-3, 6)]  # C from 2^-3 to 2^5
             }
         },
-        # {
-        #     'model_class': MILP1,
-        #     'param_grid': {
-        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-        #         'B': [i for i in range(1, n+1)]       # B is max number of features
-        #     }
-        # },
-        # {
-        #     'model_class': PinFSSVM,
-        #     'param_grid': {
-        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-        #         'tau': [0.1, 0.5, 1.0],            # Pinball loss parameter
-        #         'B': [i for i in range(1, n+1)]       # B is max number of features
-        #     },
+        {
+            'model_class': MILP1,
+            'param_grid': {
+                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+                'B': [i for i in range(1, n+1)]       # B is max number of features
+            }
+        },
+        {
+            'model_class': PinFSSVM,
+            'param_grid': {
+                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+                'tau': [0.1, 0.5, 1.0],            # Pinball loss parameter
+                'B': [i for i in range(1, n+1)]       # B is max number of features
+            },
     
-        # },
+        },
         {
             'model_class': PinballSVM,
             'param_grid': {
@@ -437,20 +462,20 @@ if __name__ == '__main__':
                 'tau': [0.1, 0.5, 1.0]             # Pinball loss parameter
             }
         },
-        # {
-        #      'model_class': FisherSVM,
-        #     'param_grid': {
-        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+        {
+             'model_class': FisherSVM,
+            'param_grid': {
+                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
                
-        #     }
-        # },
-        # {
-        #     'model_class': RFESVM,
-        #     'param_grid': {
-        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-        #         'n_features': [n//4,n//2,int(3*n/4)]  # Number of features to select
-        #     }
-        # }
+            }
+        },
+        {
+            'model_class': RFESVM,
+            'param_grid': {
+                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+                'n_features': [n//4,n//2,int(3*n/4)]  # Number of features to select
+            }
+        }
     ]
 
     

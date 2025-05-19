@@ -54,11 +54,11 @@ def load_dataset(dataset_name, dataset_type="original"):
             'outlier': os.path.join(base_dir, 'Dataset', 'sonar_outlier.txt'),
             'both': os.path.join(base_dir, 'Dataset', 'sonar_both_noise_outlier.txt')
         },
-        'australia': {
-            'original': os.path.join(base_dir, 'Dataset', 'australia.txt'),
-            'noise': os.path.join(base_dir, 'Dataset', 'australia_noise_label_feature.txt'),
-            'outlier': os.path.join(base_dir, 'Dataset', 'australia_outlier.txt'),
-            'both': os.path.join(base_dir, 'Dataset', 'australia_both_noise_outlier.txt')
+        'colon': {
+            'original': os.path.join(base_dir, 'Dataset', 'colon.csv'),
+            'noise': os.path.join(base_dir, 'Dataset', 'colon_noise_label_feature.csv'),
+            'outlier': os.path.join(base_dir, 'Dataset', 'colon_outlier.csv'),
+            'both': os.path.join(base_dir, 'Dataset', 'colon_both_noise_outlier.csv')
         }
     }
     
@@ -96,17 +96,10 @@ def load_dataset(dataset_name, dataset_type="original"):
             y = df.iloc[:, 60].values
             y = np.where(y == 'M', 1, -1)  # Convert to -1/1
         
-        elif dataset_name == 'australia':
-            # Special handling for the original australia dataset which uses spaces as delimiter
-            if dataset_type == 'original':
-                df = pd.read_csv(file_path, header=None, sep=' ')
-            else:
-                df = pd.read_csv(file_path, header=None)
-            
-            X = df.iloc[:, :14].values
-            y = df.iloc[:, 14].values
-            y = np.where(y == 0, -1, 1)  # Convert 0/1 to -1/1
-        
+        elif dataset_name == 'colon':
+            df = pd.read_csv(file_path)
+            X = df.iloc[:, :-1].values
+            y = df.iloc[:, -1].values
         return X, y
         
     except Exception as e:
@@ -125,7 +118,7 @@ def get_shape(dataset_name, dataset_type="original"):
     Parameters:
     -----------
     dataset_name : str
-        Name of the dataset ('wdbc', 'diabetes', 'cleveland', 'ionosphere', 'sonar', 'australia')
+        Name of the dataset ('wdbc', 'diabetes', 'cleveland', 'ionosphere', 'sonar', 'colon')
     """
     
     X, y = load_dataset(dataset_name, dataset_type)
@@ -133,7 +126,7 @@ def get_shape(dataset_name, dataset_type="original"):
 
 if __name__ == "__main__":
     # Example usage
-    dataset_name = 'wdbc'
+    dataset_name = 'colon'
     dataset_type = 'original'
     
     X, y = load_dataset(dataset_name, dataset_type)
@@ -142,5 +135,6 @@ if __name__ == "__main__":
         print(f"Loaded {dataset_name} ({dataset_type}) dataset successfully.")
         print(f"Feature matrix shape: {X.shape}")
         print(f"Target labels shape: {y.shape}")
+        print(f'Values in y: {np.unique(y)}')
     else:
         print("Failed to load the dataset.")
