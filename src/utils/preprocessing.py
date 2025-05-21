@@ -47,7 +47,7 @@ def create_kfolds(X, y, n_splits=10, random_state=42):
     list of tuples
         Each tuple contains (train_indices, val_indices) for a fold
     """
-    kf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+    kf = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
     folds = list(kf.split(X,y))
     return folds
 

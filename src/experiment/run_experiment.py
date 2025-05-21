@@ -386,8 +386,11 @@ def run_experiment(models_config, datasets_config, output_dir='results'):
                     continue
                 
                 # Setup cross-validation
-                n_splits = 10
-                kf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+                if dataset_name == 'colon':
+                    n_splits = 5
+                else:
+                    n_splits = 10
+                kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
                 
                 # Run grid search
                 result_data = run_grid_search(
