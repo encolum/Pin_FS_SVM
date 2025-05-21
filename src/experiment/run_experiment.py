@@ -32,7 +32,7 @@ def run_cv_for_params(model_class, params, X, y, kf):
         Parameters for model initialization
     X, y : arrays
         Dataset and labels
-    kf : KFold
+    kf : StratifiedKFold
         Cross-validation splitter
     
     Returns:
@@ -55,7 +55,7 @@ def run_cv_for_params(model_class, params, X, y, kf):
     best_fold_selected_features_single = []
     
     # Perform cross-validation
-    for fold_idx, (train_idx, test_idx) in enumerate(kf.split(X)):
+    for fold_idx, (train_idx, test_idx) in enumerate(kf.split(X,y)):
         X_train, X_test = X[train_idx], X[test_idx]
         y_train, y_test = y[train_idx], y[test_idx]
         
@@ -236,7 +236,7 @@ def run_grid_search(model_class, param_values, dataset_name, dataset_type,
         Dataset information
     X, y : arrays
         Dataset features and labels
-    kf : KFold
+    kf : StratifiedKFold
         Cross-validation splitter
     output_dir : str
         Directory to save results
@@ -387,7 +387,7 @@ def run_experiment(models_config, datasets_config, output_dir='results'):
                 
                 # Setup cross-validation
                 n_splits = 10
-                kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
+                kf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
                 
                 # Run grid search
                 result_data = run_grid_search(
@@ -406,7 +406,7 @@ def run_experiment(models_config, datasets_config, output_dir='results'):
     # Convert to DataFrame and save
     results_df = pd.DataFrame(all_results)
     timestamp = datetime.today().date()
-    results_path = os.path.join(output_dir, f'experiment_results_{dataset_name}_{timestamp}_L1_updated_plot.csv')
+    results_path = os.path.join(output_dir, f'experiment_results_{dataset_name}_{timestamp}_Stratified.csv')
     results_df.to_csv(results_path, index=False)
     
     print(f"\nSummary results saved to {results_path}")
@@ -419,7 +419,7 @@ if __name__ == '__main__':
 # Datasets to test
     data_config = [
         {
-            'dataset_name': 'diabetes',
+            'dataset_name': 'cleveland',
             'dataset_types': ['original', 'noise', 'outlier', 'both']
         }
     ]

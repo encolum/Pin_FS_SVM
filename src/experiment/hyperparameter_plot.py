@@ -16,19 +16,25 @@ from src.models.pin_fs_svm import PinFSSVM
 def plot_parameter_tuning_multi_type(results_dict, param_name, dataset_types, metric='auc_mean', 
                                     title=None, figsize=(12, 8), output_dir='results/plots'):
     """
-    Vẽ biểu đồ cho nhiều dataset_type trên cùng một biểu đồ
-    results_dict: Dictionary với key là dataset_type và value là DataFrame chứa kết quả
+    Plot charts for multiple dataset types on the same chart
+    results_dict: Dictionary with key as dataset_type and value as DataFrame containing results
     """
     if not results_dict or all(df is None or df.empty for df in results_dict.values()):
-        print("Không có kết quả để vẽ")
+        print("No results to plot")
         return None
-    if param_name == 'tau':
-        param_name = r"$\tau$"
+    original_param_name = param_name
+    display_param_name = param_name
+    if param_name =='tau':
+        x_axis_label = r"$\tau$"
+        display_param_name = 'tau'
+    else:
+        x_axis_label = str(param_name).replace('_', ' ').title()
+        display_param_name = x_axis_label
     os.makedirs(output_dir, exist_ok=True) 
     
     plt.figure(figsize=figsize)
     
-    # Màu và marker cho mỗi dataset_type
+    # Colors and markers for each dataset_type
     colors = {'original': 'blue', 'noise': 'red', 'outlier': 'green', 'both': 'purple'}
     markers = {'original': 'o', 'noise': 's', 'outlier': '^', 'both': 'D'}
     legend_handles = []
@@ -38,168 +44,167 @@ def plot_parameter_tuning_multi_type(results_dict, param_name, dataset_types, me
         if dataset_type not in results_dict or results_dict[dataset_type] is None or results_dict[dataset_type].empty:
             continue
             
-        plot_df = results_dict[dataset_type].sort_values(by=param_name)
+        plot_df = results_dict[dataset_type].sort_values(by=original_param_name)
         
-        # Vẽ đường cho dataset_type hiện tại
-        line, = plt.plot(plot_df[param_name], plot_df[metric], 
+        # Draw line for current dataset_type
+        line, = plt.plot(plot_df[original_param_name], plot_df[metric], 
                 marker=markers.get(dataset_type, 'o'),
                 linestyle='-', 
                 color=colors.get(dataset_type, 'black'),
                 )
         legend_handles.append(line)
         
-        # Thêm vùng độ lệch chuẩn nếu có
+        # Add standard deviation area if available
         std_col = metric.replace('_mean', '_std')
         if std_col in plot_df.columns:
             plt.fill_between(
-                plot_df[param_name],
+                plot_df[original_param_name],
                 plot_df[metric] - plot_df[std_col],
                 plot_df[metric] + plot_df[std_col],
                 alpha=0.05,
                 color=colors.get(dataset_type, 'black')
             )
         legend_text_for_type = f"{dataset_type.title()}"
-        # Đánh dấu điểm tốt nhất cho mỗi dataset_type
+        # Mark the best point for each dataset_type
         if not plot_df[metric].empty:
             try:
                 best_idx = plot_df[metric].idxmax() 
-                best_x = plot_df.loc[best_idx, param_name]
+                best_x = plot_df.loc[best_idx, original_param_name]
                 best_y = plot_df.loc[best_idx, metric]
                 plt.scatter(best_x, best_y, color=colors.get(dataset_type, 'black'), 
                            s=120, zorder=10, edgecolor='black',marker=markers.get(dataset_type, 'o')
                            )
-                legend_text_for_type += f" - Best {param_name}={best_x:.2g} (AUC={best_y:.4f})"
+                legend_text_for_type += f" - Best {x_axis_label}={best_x:.2g} (AUC={best_y:.4f})"
             except ValueError: 
-                print(f"Không tìm thấy điểm tốt nhất cho metric '{metric}' với {dataset_type}")
+                print(f"Could not find best point for metric '{metric}' with {dataset_type}")
         legend_texts.append(legend_text_for_type)
         
     
-    plt.xlabel(str(param_name).replace('_', ' ').title(), fontsize=12) 
+    plt.xlabel(x_axis_label, fontsize=12) 
     plt.ylabel(metric.replace('_', ' ').title(), fontsize=12)
     
-    # Đặt thang logarit nếu cần
-    if str(param_name).upper() == 'C': 
+    # Set logarithmic scale if needed
+    if str(original_param_name).upper() == 'C': 
         plt.xscale('log', base=2)
         plt.grid(True, which='both', axis='x', linestyle='--', alpha=0.7)
-    elif str(param_name).upper() == 'B':
-        # Luôn sử dụng thang logarit cho B để hiển thị tốt hơn
+    elif str(original_param_name).upper() == 'B':
+        # Always use logarithmic scale for B for better display
         plt.xscale('log')
         
-        # Lấy tất cả giá trị B xuất hiện trong dữ liệu để đặt làm tick
+        # Get all B values in the data to set as ticks
         all_b_values = set()
         for df in results_dict.values():
             if df is not None and not df.empty:
-                all_b_values.update(df[param_name].unique())
+                all_b_values.update(df[original_param_name].unique())
         
-        # Giới hạn số lượng tick để không quá đông
+        # Limit the number of ticks to avoid overcrowding
         all_b_values = sorted(all_b_values)
-        if len(all_b_values) > 15:  # Nếu có quá nhiều giá trị
-            # Chọn khoảng 10-15 giá trị đại diện
+        if len(all_b_values) > 15:  # If there are too many values
+            # Choose about 10-15 representative values
             if max(all_b_values) / min(all_b_values) > 100:
-                # Nếu dải giá trị rộng, sử dụng thang logarit để chọn mốc
+                # If range is wide, use logarithmic scale for markers
                 log_ticks = np.geomspace(min(all_b_values), max(all_b_values), num=12)
                 tick_positions = [closest_value(all_b_values, x) for x in log_ticks]
             else:
-                # Nếu dải giá trị hẹp, chọn đều các mốc
+                # If range is narrow, evenly space the markers
                 step = max(1, len(all_b_values) // 12)
                 tick_positions = all_b_values[::step]
-                # Luôn bao gồm giá trị đầu và cuối
+                # Always include first and last values
                 if all_b_values[0] not in tick_positions:
                     tick_positions = [all_b_values[0]] + tick_positions
                 if all_b_values[-1] not in tick_positions:
                     tick_positions.append(all_b_values[-1])
         else:
-            # Nếu ít giá trị, hiển thị tất cả
+            # If few values, display all
             tick_positions = all_b_values
         
-        # Đặt tick positions và labels
+        # Set tick positions and labels
         plt.xticks(tick_positions, [str(int(x)) for x in tick_positions])
         
-        # Thêm lưới dọc tại các điểm mốc B
+        # Add vertical grid at B marker points
         plt.grid(True, which='both', axis='x', linestyle='--', alpha=0.7)
     else:
-        # Cho các tham số khác
+        # For other parameters
         plt.grid(True, linestyle='--', alpha=0.7)
 
-    plot_title = title if title else f"So sánh độ nhạy của {metric} với {param_name} qua các dataset type"
+    plot_title = title if title else f"Sensitivity comparison of {metric} to {display_param_name} across dataset types"
     plt.title(plot_title, fontsize=14)
     
     plt.grid(True, linestyle='--', alpha=0.7)
-    plt.legend(loc = 'best', fontsize=10)
-    if legend_handles and legend_texts: # Chỉ tạo legend nếu có gì để hiển thị
-        plt.legend(legend_handles, legend_texts, fontsize=9, loc='best')
+    if legend_handles and legend_texts: 
+        plt.legend(legend_handles, legend_texts, fontsize=10, loc='best')
     plt.tight_layout()
     
-    # Tạo tên file an toàn
+    # Create safe filename
     safe_title = f'comparison_{param_name}_across_types.png'
     save_path = os.path.join(output_dir, safe_title)
     
     try:
         plt.savefig(save_path, dpi = 300)
-        print(f"Đã lưu biểu đồ vào {save_path}")
+        print(f"Chart saved to {save_path}")
     except Exception as e:
-        print(f"Lỗi khi lưu biểu đồ: {e}")
+        print(f"Error when saving chart: {e}")
             
     plt.close() 
     return plt.gcf()
 
 def closest_value(values, target):
-    """Tìm giá trị gần nhất với target trong list values"""
+    """Find the closest value to the target in the values list"""
     return min(values, key=lambda x: abs(x - target))
 
 def generate_comparison_plots(model_class, dataset_name, dataset_types, best_params_dict, base_output_dir):
     """
-    Tạo biểu đồ so sánh các dataset_type khác nhau
+    Generate comparison charts for different dataset types
     
     Parameters:
     -----------
-    model_class: class, lớp mô hình (PinFSSVM)
-    dataset_name: str, tên dataset
-    dataset_types: list, danh sách các dataset_type cần so sánh (original, noise, outlier, both)
-    best_params_dict: dict, dictionary với key là dataset_type và value là dict chứa tham số tốt nhất
-    base_output_dir: str, thư mục đầu ra
+    model_class: class, model class (PinFSSVM)
+    dataset_name: str, dataset name
+    dataset_types: list, list of dataset types to compare (original, noise, outlier, both)
+    best_params_dict: dict, dictionary with key as dataset_type and value as dict containing best parameters
+    base_output_dir: str, output directory
     """
-    # Tạo thư mục đầu ra
+    # Create output directory
     plot_output_dir = os.path.join(base_output_dir, "param_comparison_plots", dataset_name, model_class.__name__)
     os.makedirs(plot_output_dir, exist_ok=True)
 
-    # Tạo K-fold cross-validation 
-    kf = KFold(n_splits=10, shuffle=True, random_state=42)
+    # Create K-fold cross-validation 
+    kf = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
     
-    # Dictionary để lưu dữ liệu cho mỗi tham số
+    # Dictionary to store data for each parameter
     tau_results_dict = {}
     C_results_dict = {}
     B_results_dict = {}
     
-    # Định nghĩa giá trị tham số cần quét
+    # Define parameter values to scan
     TAU_PLOT_VALUES = [0.1, 0.5, 1.0]
-    C_PLOT_VALUES = [2**i for i in range(-3, 6)]  # 2^-3 đến 2^5
+    C_PLOT_VALUES = [2**i for i in range(-3, 6)]  # 2^-3 to 2^5
     
-    # Tải dữ liệu cho mỗi dataset_type và tạo biểu đồ
-    print(f"Đang tạo biểu đồ so sánh cho dataset {dataset_name} với các loại: {', '.join(dataset_types)}")
+    # Load data for each dataset_type and create charts
+    print(f"Creating comparison charts for dataset {dataset_name} with types: {', '.join(dataset_types)}")
     
-    # Dictionary lưu dữ liệu X, y của mỗi dataset_type để tránh tải lại nhiều lần
+    # Dictionary to store X, y data for each dataset_type to avoid reloading
     datasets = {}
     
-    # Tải dữ liệu cho mỗi dataset_type
+    # Load data for each dataset_type
     for dataset_type in dataset_types:
-        print(f"  Đang tải dữ liệu cho {dataset_name} (type: {dataset_type})...")
+        print(f"  Loading data for {dataset_name} (type: {dataset_type})...")
         try:
             X, y = load_dataset(dataset_name, dataset_type)
             if X.shape[0] > 0 and X.shape[1] > 0:
                 datasets[dataset_type] = (X, y)
                 
-                # Xác định giá trị B dựa trên số lượng features
+                # Determine B values based on number of features
                 max_features = X.shape[1]
                 best_B = best_params_dict.get('B')
                 B_PLOT_VALUES = determine_B_values(max_features, best_B)
                 
-                # Lấy tham số tốt nhất
+                # Get best parameters
                 if dataset_type in best_params_dict:
                     best_params = best_params_dict[dataset_type]
                     
-                    # --- Quét tau với C và B cố định ---
-                    print(f"  Đang tạo dữ liệu tau cho {dataset_type}...")
+                    # --- Scan tau with fixed C and B ---
+                    print(f"  Generating tau data for {dataset_type}...")
                     best_C = best_params.get('C', 1.0)
                     best_B = best_params.get('B', max_features//2 if max_features > 1 else 1)
                     results_tau = []
@@ -219,8 +224,8 @@ def generate_comparison_plots(model_class, dataset_name, dataset_types, best_par
                     if results_tau:
                         tau_results_dict[dataset_type] = pd.DataFrame(results_tau)
                     
-                    # --- Quét C với tau và B cố định ---
-                    print(f"  Đang tạo dữ liệu C cho {dataset_type}...")
+                    # --- Scan C with fixed tau and B ---
+                    print(f"  Generating C data for {dataset_type}...")
                     best_tau = best_params.get('tau', 0.5)
                     results_C = []
                     
@@ -239,8 +244,8 @@ def generate_comparison_plots(model_class, dataset_name, dataset_types, best_par
                     if results_C:
                         C_results_dict[dataset_type] = pd.DataFrame(results_C)
                     
-                    # --- Quét B với C và tau cố định ---
-                    print(f"  Đang tạo dữ liệu B cho {dataset_type}...")
+                    # --- Scan B with fixed C and tau ---
+                    print(f"  Generating B data for {dataset_type}...")
                     results_B = []
                     
                     for b_val in B_PLOT_VALUES:
@@ -260,43 +265,44 @@ def generate_comparison_plots(model_class, dataset_name, dataset_types, best_par
                         B_results_dict[dataset_type] = pd.DataFrame(results_B).dropna(subset=['auc_mean'])
             
             else:
-                print(f"  Dữ liệu rỗng cho {dataset_name} ({dataset_type})")
+                print(f"  Empty data for {dataset_name} ({dataset_type})")
                 
         except Exception as e:
-            print(f"  Lỗi khi tải hoặc xử lý dữ liệu {dataset_name} ({dataset_type}): {e}")
+            print(f"  Error loading or processing data {dataset_name} ({dataset_type}): {e}")
     
-    # Vẽ biểu đồ so sánh các dataset_type
+    # Draw comparison charts for dataset types
     if tau_results_dict:
-        print("Đang vẽ biểu đồ so sánh tau...")
+        print("Drawing tau comparison chart...")
+        title = 'AUC vs $\\tau$ comparison for {} across dataset types'.format(dataset_name)
         plot_parameter_tuning_multi_type(
             tau_results_dict, 'tau', dataset_types, metric='auc_mean', 
-            title=f'So sánh AUC vs r"$\tau$" cho {dataset_name} qua các dataset type', 
+            title=title,
             output_dir=plot_output_dir
         )
-    
+        
     if C_results_dict:
-        print("Đang vẽ biểu đồ so sánh C...")
+        print("Drawing C comparison chart...")
         plot_parameter_tuning_multi_type(
             C_results_dict, 'C', dataset_types, metric='auc_mean', 
-            title=f'So sánh AUC vs C cho {dataset_name} qua các dataset type', 
+            title=f'AUC vs C comparison for {dataset_name} across dataset types', 
             output_dir=plot_output_dir
         )
     
     if B_results_dict:
-        print("Đang vẽ biểu đồ so sánh B...")
+        print("Drawing B comparison chart...")
         plot_parameter_tuning_multi_type(
             B_results_dict, 'B', dataset_types, metric='auc_mean', 
-            title=f'So sánh AUC vs B cho {dataset_name} qua các dataset type', 
+            title=f'AUC vs B comparison for {dataset_name} across dataset types', 
             output_dir=plot_output_dir
         )
         
-    print(f"Hoàn thành vẽ biểu đồ so sánh cho {dataset_name}")
+    print(f"Completed drawing comparison charts for {dataset_name}")
 
 def determine_B_values(max_features, best_B=None):
-    """Hàm xác định giá trị B dựa trên số lượng đặc trưng với nhiều điểm hơn"""
+    """Function to determine B values based on the number of features with more points"""
     _candidate_B_values = []
     
-    # Luôn bắt đầu với giá trị B=1
+    # Always start with B=1
     _candidate_B_values.append(1)
     
     if max_features <= 0:
@@ -304,101 +310,101 @@ def determine_B_values(max_features, best_B=None):
     elif max_features == 1:
         return [1]
     elif max_features <= 15:
-        # Đối với dataset nhỏ, dùng tất cả các giá trị nguyên 
+        # For small datasets, use all integer values 
         _candidate_B_values = list(range(1, max_features + 1))
     elif max_features <= 35:
-        # Thêm B=2 và B=3 để tăng mật độ điểm ở vùng đầu
+        # Add B=2 and B=3 to increase density at the beginning
         _candidate_B_values.extend([2, 3])
-        # Thêm điểm ở giữa dải giá trị
+        # Add points in the middle range
         _candidate_B_values.extend(list(range(min(5, max_features), max_features + 1, max(1, max_features // 10))))
-        # Thêm các điểm theo phần trăm
+        # Add points by percentage
         for p in [0.2, 0.4, 0.6, 0.8]:
             b_val = int(round(p * max_features))
             if b_val >= 1:
                 _candidate_B_values.append(b_val)
     elif max_features <= 70:
-        # Thêm nhiều điểm hơn ở vùng đầu
+        # Add more points at the beginning
         _candidate_B_values.extend([2, 3, 5, 7])
-        # Điểm ở vùng giữa
+        # Points in the middle range
         _candidate_B_values.extend(list(range(min(10, max_features), max_features + 1, max(1, max_features // 12))))
-        # Thêm các điểm theo phần trăm
+        # Add points by percentage
         for p in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
             b_val = int(round(p * max_features))
             if b_val >= 1:
                 _candidate_B_values.append(b_val)
     else:
-        # Với dataset lớn, cần nhiều điểm ở vùng đầu
+        # For large datasets, need more points at the beginning
         _candidate_B_values.extend([2, 3, 5, 7, 10, 15, 20, 25, 30, 40, 50])
         
-        # Thêm nhiều điểm phần trăm hơn
+        # Add more percentage points
         percent_points = [0.01, 0.02, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95]
         for p in percent_points:
             b_val = int(round(p * max_features))
             if b_val >= 1:
                 _candidate_B_values.append(b_val)
         
-        # Thêm điểm theo thang logarit
+        # Add logarithmic points
         if max_features > 100:
-            # Tăng số lượng điểm logarit lên 8
+            # Increase number of logarithmic points to 8
             log_points = np.geomspace(min(20, max_features-1), 
                                       max_features-1 if max_features > 1 else 1, 
                                       num=8, dtype=int)
             _candidate_B_values.extend(log_points.tolist())
 
-    # Luôn bao gồm giá trị max_features
+    # Always include max_features
     _candidate_B_values.append(max_features)
     
-    # Đảm bảo best_B được bao gồm nếu cung cấp
+    # Ensure best_B is included if provided
     if best_B is not None and 1 <= best_B <= max_features and best_B not in _candidate_B_values:
         _candidate_B_values.append(best_B)
-        print(f"Thêm best_B={best_B} từ file Excel vào danh sách quét B")
+        print(f"Adding best_B={best_B} from Excel file to B scan list")
     
-    # Loại bỏ trùng lặp và sắp xếp
+    # Remove duplicates and sort
     return sorted(list(set(b for b in _candidate_B_values if 1 <= b <= max_features)))
 
 def main_compare_dataset_types():
-    parser = argparse.ArgumentParser(description="So sánh hiệu suất giữa các loại dataset cho PinFSSVM.")
+    parser = argparse.ArgumentParser(description="Compare performance between dataset types for PinFSSVM.")
     parser.add_argument(
         "--results_file",
         type=str,
         required=True,
-        help="Đường dẫn đến file Excel kết quả thí nghiệm."
+        help="Path to the experiment results Excel file."
     )
     parser.add_argument(
         "--output_dir",
         type=str,
         default="results",
-        help="Thư mục cơ sở để lưu biểu đồ."
+        help="Base directory to save charts."
     )
     parser.add_argument(
         "--dataset_name",
         type=str,
         required=True,
-        help="Tên dataset cần so sánh."
+        help="Dataset name to compare."
     )
     parser.add_argument(
         "--dataset_types",
         type=str,
         nargs='+',
         default=['original', 'noise', 'outlier', 'both'],
-        help="Danh sách các dataset_type cần so sánh."
+        help="List of dataset types to compare."
     )
 
     args = parser.parse_args()
 
-    print(f"Đang tải kết quả từ: {args.results_file}")
+    print(f"Loading results from: {args.results_file}")
     if not os.path.exists(args.results_file):
-        print(f"Lỗi: Không tìm thấy file kết quả tại {args.results_file}")
+        print(f"Error: Could not find results file at {args.results_file}")
         return
 
     results_df_all = pd.read_excel(args.results_file)
     results_df_all.columns = results_df_all.columns.str.strip()  
-    print(f"Đã tải {len(results_df_all)} kết quả từ Excel.")
+    print(f"Loaded {len(results_df_all)} results from Excel.")
 
     target_model_name = PinFSSVM.__name__
-    expected_type_of_model_in_csv = "Not noise"  # Giữ nguyên như code gốc
+    expected_type_of_model_in_csv = "Not noise"  # Keep as in original code
     
-    # Lọc kết quả cho dataset được chỉ định
+    # Filter results for the specified dataset
     dataset_results = results_df_all[
         (results_df_all['Model'] == target_model_name) 
         # (results_df_all['Type of model'] == expected_type_of_model_in_csv) 
@@ -406,7 +412,7 @@ def main_compare_dataset_types():
     ]
     
     if dataset_results.empty:
-        print(f"Không tìm thấy kết quả cho dataset '{args.dataset_name}' với model '{target_model_name}'.")
+        print(f"No results found for dataset '{args.dataset_name}' with model '{target_model_name}'.")
         return
     
     type_mapping = {
@@ -415,17 +421,17 @@ def main_compare_dataset_types():
         'Outlier': 'outlier',
         'Noise + Outlier': 'both'
     }
-    # Thu thập tham số tốt nhất cho mỗi dataset_type
+    # Collect best parameters for each dataset_type
     best_params_dict = {}
     for excel_type, code_type in type_mapping.items():
-        if code_type in args.dataset_types:  # Chỉ xử lý các loại dataset được yêu cầu
+        if code_type in args.dataset_types:  # Only process requested dataset types
             type_results = dataset_results[dataset_results['Type of model'] == excel_type]
             if not type_results.empty:
-                # Lấy hàng có Average AUC cao nhất
+                # Get row with highest Average AUC
                 if 'Average AUC' in type_results.columns:
                     best_row = type_results.loc[type_results['Average AUC'].idxmax()]
                 else:
-                    # Nếu không có cột Average AUC, lấy hàng đầu tiên
+                    # If no Average AUC column, take first row
                     best_row = type_results.iloc[0]
                 
                 params = {}
@@ -435,13 +441,13 @@ def main_compare_dataset_types():
                 
                 if params:
                     best_params_dict[code_type] = params
-                    print(f"Tham số tốt nhất cho {code_type} ('{excel_type}' trong Excel): {params}")
+                    print(f"Best parameters for {code_type} ('{excel_type}' in Excel): {params}")
     
     if not best_params_dict:
-        print(f"Không tìm thấy tham số tốt nhất cho bất kỳ dataset_type nào.")
+        print(f"Could not find best parameters for any dataset type.")
         return
     
-    print(f"Đang tạo biểu đồ so sánh cho dataset {args.dataset_name} với các loại: {', '.join(args.dataset_types)}")
+    print(f"Creating comparison charts for dataset {args.dataset_name} with types: {', '.join(args.dataset_types)}")
     try:
         generate_comparison_plots(
             model_class=PinFSSVM,
@@ -450,9 +456,9 @@ def main_compare_dataset_types():
             best_params_dict=best_params_dict,
             base_output_dir=args.output_dir
         )
-        print(f"Hoàn thành tạo biểu đồ so sánh cho {args.dataset_name}.")
+        print(f"Completed creating comparison charts for {args.dataset_name}.")
     except Exception as e:
-        print(f"Lỗi khi tạo biểu đồ so sánh: {e}")
+        print(f"Error creating comparison charts: {e}")
         import traceback
         traceback.print_exc()
 
