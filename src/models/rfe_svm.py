@@ -18,7 +18,7 @@ class RFESVM:
         self.b = None
         self.train_time = None
 
-    def _svm_train_qp(self, X, y):
+    def _svm_train(self, X, y):
         # QP solver for L1-regularized linear SVM
         opt_mod = Model(name='L1-SVM')
         if self.time_limit:
@@ -42,6 +42,32 @@ class RFESVM:
             opt_mod.add_constraint(-w[j] <= v[j])
 
         sol = opt_mod.solve()
+        
+        # # Initialize model
+        # opt_mod = Model(name='L2-SVM')
+        
+        # # Get dimensions
+        # m, n = X.shape
+        
+        # # Define decision variables
+        # w = opt_mod.continuous_var_list(n, name='w')
+        # b = opt_mod.continuous_var(name='b')
+        # xi = opt_mod.continuous_var_list(m, lb=0, name='xi')
+        
+        # # Define objective function
+        # opt_mod.minimize(0.5 * opt_mod.sum(w[j] ** 2 for j in range(n)) + 
+        #                  self.C * opt_mod.sum(xi[i] for i in range(m)))
+        
+        # # Add constraints
+        # for i in range(m):
+        #     opt_mod.add_constraint(y[i] * (opt_mod.sum(w[j] * X[i, j] for j in range(n)) + b) >= 1 - xi[i])
+        
+        # # Set time limit if specified
+        # if self.time_limit is not None:
+        #     opt_mod.set_time_limit(self.time_limit)
+        
+        # # Solve the model
+        # sol = opt_mod.solve()
         if sol is None:
             return None, None
         w_opt = np.array([sol.get_value(w[j]) for j in range(n)])
@@ -57,7 +83,7 @@ class RFESVM:
         # Eliminate one feature at a time
         while len(remaining) > k:
             X_sub = X[:, remaining]
-            w_sub, b_sub = self._svm_train_qp(X_sub, y)
+            w_sub, b_sub = self._svm_train(X_sub, y)
             if w_sub is None:
                 break
             # Remove least important feature
@@ -67,7 +93,7 @@ class RFESVM:
         self.selected_indices = remaining
         # Final training
         X_fin = X[:, remaining]
-        w_fin, b_fin = self._svm_train_qp(X_fin, y)
+        w_fin, b_fin = self._svm_train(X_fin, y)
         self.w = np.zeros(d)
         if w_fin is not None:
             for i, idx in enumerate(remaining):

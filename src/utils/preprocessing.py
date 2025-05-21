@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, StratifiedKFold
 
 def standardize_data(X_train, X_test):
     """
@@ -47,8 +47,8 @@ def create_kfolds(X, y, n_splits=10, random_state=42):
     list of tuples
         Each tuple contains (train_indices, val_indices) for a fold
     """
-    kf = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
-    folds = list(kf.split(X))
+    kf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+    folds = list(kf.split(X,y))
     return folds
 
 def calculate_f_score(X, y):

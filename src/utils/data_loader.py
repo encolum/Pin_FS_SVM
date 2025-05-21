@@ -54,11 +54,11 @@ def load_dataset(dataset_name, dataset_type="original"):
             'outlier': os.path.join(base_dir, 'Dataset', 'sonar_outlier.txt'),
             'both': os.path.join(base_dir, 'Dataset', 'sonar_both_noise_outlier.txt')
         },
-        'australia': {
-            'original': os.path.join(base_dir, 'Dataset', 'australia.txt'),
-            'noise': os.path.join(base_dir, 'Dataset', 'australia_noise_label_feature.txt'),
-            'outlier': os.path.join(base_dir, 'Dataset', 'australia_outlier.txt'),
-            'both': os.path.join(base_dir, 'Dataset', 'australia_both_noise_outlier.txt')
+        'colon': {
+            'original': os.path.join(base_dir, 'Dataset', 'colon.csv'),
+            'noise': os.path.join(base_dir, 'Dataset', 'colon_noise_label_feature.csv'),
+            'outlier': os.path.join(base_dir, 'Dataset', 'colon_outlier.csv'),
+            'both': os.path.join(base_dir, 'Dataset', 'colon_both_noise_outlier.csv')
         }
     }
     
@@ -70,43 +70,36 @@ def load_dataset(dataset_name, dataset_type="original"):
             df = pd.read_csv(file_path, header=None)
             X = df.iloc[:, 2:].values
             y = df.iloc[:, 1].values
-            y = np.where(y == 'M', 1, -1)  # Convert B/M to -1/1
+            y = np.where(y == 'M', 1, -1)  # Convert B/M to -1/1 ----> 1:Maglinant, -1:Benign
         
         elif dataset_name == 'diabetes':
             df = pd.read_csv(file_path)
             X = df.iloc[:, :-1].values
             y = df.iloc[:, -1].values
-            y = np.where(y == 0, -1, 1)  # Convert 0/1 to -1/1
+            y = np.where(y == 0, -1, 1)  # Convert 0/1 to -1/1 ----> 1:Diabetes, -1:Non-Diabetes
         
         elif dataset_name == 'cleveland':
             df = pd.read_csv(file_path, header=None)
             X = df.iloc[1:, 0:13].values.astype(float)
             y = df.iloc[1:, 13].values.astype(float)
-            y = np.where(y == 0, -1, 1)  # Convert 0/1 to -1/1
+            y = np.where(y == 0, -1, 1)  # Convert 0/1 to -1/1 ----> 1:Heart Disease, -1:No Heart Disease
         
         elif dataset_name == 'ionosphere':
             df = pd.read_csv(file_path, header=None)
             X = df.iloc[:, :-1].values
             y = df.iloc[:, -1].values
-            y = np.where(y == 'g', 1, -1)  # Convert g/b to 1/-1
+            y = np.where(y == 'g', 1, -1)  # Convert g/b to 1/-1 ----> 1:Good, -1:Bad
         
         elif dataset_name == 'sonar':
             df = pd.read_csv(file_path, header=None)
             X = df.iloc[:, 0:60].values
             y = df.iloc[:, 60].values
-            y = np.where(y == 'M', 1, -1)  # Convert to -1/1
+            y = np.where(y == 'M', 1, -1)  # Convert to -1/1 ----> 1:Mine, -1:Rock
         
-        elif dataset_name == 'australia':
-            # Special handling for the original australia dataset which uses spaces as delimiter
-            if dataset_type == 'original':
-                df = pd.read_csv(file_path, header=None, sep=' ')
-            else:
-                df = pd.read_csv(file_path, header=None)
-            
-            X = df.iloc[:, :14].values
-            y = df.iloc[:, 14].values
-            y = np.where(y == 0, -1, 1)  # Convert 0/1 to -1/1
-        
+        elif dataset_name == 'colon':
+            df = pd.read_csv(file_path, header = None)
+            X = df.iloc[:, :-1].values
+            y = df.iloc[:, -1].values
         return X, y
         
     except Exception as e:
@@ -125,15 +118,38 @@ def get_shape(dataset_name, dataset_type="original"):
     Parameters:
     -----------
     dataset_name : str
-        Name of the dataset ('wdbc', 'diabetes', 'cleveland', 'ionosphere', 'sonar', 'australia')
+        Name of the dataset ('wdbc', 'diabetes', 'cleveland', 'ionosphere', 'sonar', 'colon')
     """
     
     X, y = load_dataset(dataset_name, dataset_type)
     return X.shape[0], X.shape[1]
-
+def get_ratio_class(dataset_name, dataset_type="original"):
+    """
+    Get the ratio of classes in the dataset
+    
+    Parameters:
+    -----------
+    dataset_name : str
+        Name of the dataset ('wdbc', 'diabetes', 'cleveland', 'ionosphere', 'sonar', 'colon')
+    
+    Returns:
+    --------
+    dict
+        Dictionary containing the ratio of classes
+    """
+    
+    X, y = load_dataset(dataset_name, dataset_type)
+    
+    if y.size == 0:
+        return {}
+    
+    count_1 = np.sum(y == 1)
+    count_neg1 = np.sum(y == -1)
+    
+    return f'Ratio of positive to negative samples: {count_1}/{count_neg1}'
 if __name__ == "__main__":
     # Example usage
-    dataset_name = 'wdbc'
+    dataset_name = 'sonar'
     dataset_type = 'original'
     
     X, y = load_dataset(dataset_name, dataset_type)
@@ -142,5 +158,7 @@ if __name__ == "__main__":
         print(f"Loaded {dataset_name} ({dataset_type}) dataset successfully.")
         print(f"Feature matrix shape: {X.shape}")
         print(f"Target labels shape: {y.shape}")
+        print(f'Values in y: {np.unique(y)}')
+        print(get_ratio_class(dataset_name, dataset_type))
     else:
         print("Failed to load the dataset.")
