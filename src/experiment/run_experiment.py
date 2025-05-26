@@ -20,6 +20,59 @@ from src.models.rfe_svm import RFESVM
 import matplotlib.pyplot as plt 
 
 
+
+def save_auc_for_wilcoxon(model_class, dataset_name, dataset_type, best_params, 
+                         best_cv_auc_scores, output_dir='results'):
+    """
+    Save AUC scores from each fold for Wilcoxon test analysis
+    
+    Parameters:
+    -----------
+    model_class : class
+        The model class used
+    dataset_name : str
+        Name of the dataset
+    dataset_type : str
+        Type of dataset (original, noise, outlier, both)
+    best_params : dict
+        Best parameters found
+    best_cv_auc_scores : list
+        AUC scores from each fold for the best parameters
+    output_dir : str
+        Directory to save results
+    """
+    # Create wilcoxon directory
+    wilcoxon_dir = os.path.join(output_dir, 'wilcoxon')
+    os.makedirs(wilcoxon_dir, exist_ok=True)
+    dataset_dir = os.path.join(wilcoxon_dir, dataset_name)
+    os.makedirs(dataset_dir, exist_ok=True)
+    dirpath = os.path.join(dataset_dir, dataset_type)
+    os.makedirs(dirpath, exist_ok=True)
+    # Create filename with model, dataset, and dataset type
+    filename = f"{model_class.__name__}_auc_folds.xlsx"
+    filepath = os.path.join(dirpath, filename)
+    
+    # Prepare data for saving
+    auc_data = {
+        'Model': model_class.__name__,
+        'Dataset': dataset_name,
+        'Dataset_Type': dataset_type,
+        'Fold': list(range(1, len(best_cv_auc_scores) + 1)),
+        'AUC': best_cv_auc_scores
+    }
+    
+    # Add best parameters as columns
+    for param_name, param_value in best_params.items():
+        auc_data[f'Best_{param_name}'] = [param_value] * len(best_cv_auc_scores)
+    
+    # Create DataFrame and save
+    auc_df = pd.DataFrame(auc_data)
+    auc_df.to_excel(filepath, index=False)
+    
+    print(f"  AUC fold data saved to: {filepath}")
+    
+    
+
 def run_cv_for_params(model_class, params, X, y, kf):
     """
     Run cross-validation for a specific set of parameters
@@ -265,6 +318,7 @@ def run_grid_search(model_class, param_values, dataset_name, dataset_type,
     best_w = None
     best_model = None
     best_model_overall_best_fold = None
+    best_cv_auc_scores = []
     all_param_metrics = {}
     
     # Generate all parameter combinations
@@ -311,6 +365,7 @@ def run_grid_search(model_class, param_values, dataset_name, dataset_type,
                 best_mean_cv_g_mean = mean_g_mean
                 best_cv_metrics = cv_metrics
                 best_all_selected_features = cv_results['selected_features_all_folds']
+                best_cv_auc_scores = cv_metrics['auc']
                 
                 best_model_overall_best_fold = cv_results['best_performing_fold_model']
                 num_features_overall_best_fold = cv_results['best_performing_fold_num_features']
@@ -334,6 +389,11 @@ def run_grid_search(model_class, param_values, dataset_name, dataset_type,
             model_class, dataset_name, dataset_type, 
             all_param_metrics, output_dir
         )
+        # Save AUC scores for Wilcoxon test
+        save_auc_for_wilcoxon(
+            model_class, dataset_name, dataset_type, 
+            best_params, best_cv_auc_scores, output_dir
+        )
         
         return {
             'result': result,
@@ -341,7 +401,9 @@ def run_grid_search(model_class, param_values, dataset_name, dataset_type,
             'final_selected_features': final_selected_features,
             'all_selected_features': best_all_selected_features,
             'best_w': best_w,
-            'best_model': best_model
+            'best_model': best_model,
+            'best_auc_scores': best_cv_auc_scores
+            
         }
     
     return None
@@ -425,7 +487,7 @@ if __name__ == '__main__':
 # Datasets to test
     data_config = [
         {
-            'dataset_name': 'ionosphere',
+            'dataset_name': 'diabetes',
             'dataset_types': ['original', 'noise', 'outlier', 'both']
         }
     ]
