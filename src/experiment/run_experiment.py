@@ -190,16 +190,19 @@ def process_best_results(model_class, dataset_name, dataset_type, best_params, b
 
 
 def save_detailed_metrics(model_class, dataset_name, dataset_type, all_param_metrics, 
-                          output_dir='results', n_splits=10):
+                          output_dir='results'):
     """Save detailed metrics for all parameter combinations"""
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     param_metrics_dir = os.path.join(output_dir, 'detailed_metrics')
     os.makedirs(param_metrics_dir, exist_ok=True)
-    
+    if dataset_name == 'colon':
+        n_splits = 5
+    else:
+        n_splits = 10
     for param_key, metrics_data in all_param_metrics.items():
         detailed_file = os.path.join(
             param_metrics_dir, 
-            f"{model_class.__name__}_{dataset_name}_{dataset_type}_{param_key}_{timestamp}.csv"
+            f"{model_class.__name__}_{dataset_name}_{dataset_type}_{param_key}_{timestamp}.xlsx"
         )
         
         # Create detailed metrics DataFrame
@@ -217,7 +220,7 @@ def save_detailed_metrics(model_class, dataset_name, dataset_type, all_param_met
         for fold_idx, features in enumerate(metrics_data['selected_features']):
             metrics_df.at[fold_idx, 'selected_features'] = str(features)
         
-        metrics_df.to_csv(detailed_file, index=False)
+        metrics_df.to_excel(detailed_file, index=False)
 
 
 
@@ -329,7 +332,7 @@ def run_grid_search(model_class, param_values, dataset_name, dataset_type,
         # Save detailed metrics
         save_detailed_metrics(
             model_class, dataset_name, dataset_type, 
-            all_param_metrics, output_dir, n_splits
+            all_param_metrics, output_dir
         )
         
         return {
@@ -409,8 +412,8 @@ def run_experiment(models_config, datasets_config, output_dir='results'):
     # Convert to DataFrame and save
     results_df = pd.DataFrame(all_results)
     timestamp = datetime.today().date()
-    results_path = os.path.join(output_dir, f'experiment_results_{dataset_name}_{timestamp}_Stratified.csv')
-    results_df.to_csv(results_path, index=False)
+    results_path = os.path.join(output_dir, f'experiment_results_{dataset_name}.xlsx')
+    results_df.to_excel(results_path, index=False)
     
     print(f"\nSummary results saved to {results_path}")
     print(f"Detailed metrics saved in {os.path.join(output_dir, 'detailed_metrics')}")
@@ -422,7 +425,7 @@ if __name__ == '__main__':
 # Datasets to test
     data_config = [
         {
-            'dataset_name': 'cleveland',
+            'dataset_name': 'ionosphere',
             'dataset_types': ['original', 'noise', 'outlier', 'both']
         }
     ]
@@ -483,4 +486,4 @@ if __name__ == '__main__':
 
     
     # Run experiments
-    results = run_experiment(models_config, data_config, output_dir='results')
+    results = run_experiment(models_config, data_config, output_dir=f'results')

@@ -97,9 +97,10 @@ class FisherSVM:
                 continue
             errs = []
             # 5 random hold-out repeats
-            for _ in range(5):
+            for i in range(5):
+                current_seed = 42 + i
                 Xtr, Xval, ytr, yval = train_test_split(
-                    X[:, mask], y, test_size=0.2, random_state=None
+                    X[:, mask], y, test_size=0.2, random_state=current_seed
                 )
                 w, b = self._svm_train(Xtr, ytr)
                 if w is None:

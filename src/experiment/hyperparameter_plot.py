@@ -38,20 +38,29 @@ def plot_parameter_tuning_multi_type(results_dict, param_name, dataset_types, me
     colors = {'original': 'blue', 'noise': 'red', 'outlier': 'green', 'both': 'purple'}
     markers = {'original': 'o', 'noise': 's', 'outlier': '^', 'both': 'D'}
     legend_handles = []
-    legend_texts = []
-    
+    legend_texts = [] 
     for dataset_type in dataset_types:
         if dataset_type not in results_dict or results_dict[dataset_type] is None or results_dict[dataset_type].empty:
             continue
             
         plot_df = results_dict[dataset_type].sort_values(by=original_param_name)
         
-        # Draw line for current dataset_type
-        line, = plt.plot(plot_df[original_param_name], plot_df[metric], 
-                marker=markers.get(dataset_type, 'o'),
-                linestyle='-', 
-                color=colors.get(dataset_type, 'black'),
-                )
+        current_color = colors.get(dataset_type, 'black')
+        current_marker = markers.get(dataset_type, 'o')
+
+        # Draw line for current dataset_type (without markers initially if plotting B)
+        if str(original_param_name).upper() == 'B':
+            line, = plt.plot(plot_df[original_param_name], plot_df[metric], 
+                    linestyle='-', 
+                    color=current_color,
+                    # marker=None, # Markers will be added selectively later for B
+                    )
+        else: # For C and Tau, plot with markers as before
+            line, = plt.plot(plot_df[original_param_name], plot_df[metric], 
+                    marker=current_marker,
+                    linestyle='-', 
+                    color=current_color,
+                    )
         legend_handles.append(line)
         
         # Add standard deviation area if available
@@ -62,19 +71,19 @@ def plot_parameter_tuning_multi_type(results_dict, param_name, dataset_types, me
                 plot_df[metric] - plot_df[std_col],
                 plot_df[metric] + plot_df[std_col],
                 alpha=0.05,
-                color=colors.get(dataset_type, 'black')
+                color=current_color
             )
         legend_text_for_type = f"{dataset_type.title()}"
         # Mark the best point for each dataset_type
         if not plot_df[metric].empty:
             try:
                 best_idx = plot_df[metric].idxmax() 
-                best_x = plot_df.loc[best_idx, original_param_name]
-                best_y = plot_df.loc[best_idx, metric]
-                plt.scatter(best_x, best_y, color=colors.get(dataset_type, 'black'), 
-                           s=120, zorder=10, edgecolor='black',marker=markers.get(dataset_type, 'o')
+                best_x_val = plot_df.loc[best_idx, original_param_name] # Renamed to avoid conflict
+                best_y_val = plot_df.loc[best_idx, metric] # Renamed to avoid conflict
+                plt.scatter(best_x_val, best_y_val, color=current_color, 
+                           s=120, zorder=10, edgecolor='black', marker=current_marker
                            )
-                legend_text_for_type += f" - Best {x_axis_label}={best_x:.2g} (AUC={best_y:.4f})"
+                legend_text_for_type += f" - Best {x_axis_label}={best_x_val:.3f} (AUC={best_y_val:.4f})"
             except ValueError: 
                 print(f"Could not find best point for metric '{metric}' with {dataset_type}")
         legend_texts.append(legend_text_for_type)
@@ -92,40 +101,78 @@ def plot_parameter_tuning_multi_type(results_dict, param_name, dataset_types, me
         plt.xscale('log')
         
         # Get all B values in the data to set as ticks
-        all_b_values = set()
-        for df in results_dict.values():
-            if df is not None and not df.empty:
-                all_b_values.update(df[original_param_name].unique())
+        all_b_values_set = set()
+        for df_val in results_dict.values(): 
+            if df_val is not None and not df_val.empty:
+                all_b_values_set.update(df_val[original_param_name].unique())
         
-        # Limit the number of ticks to avoid overcrowding
-        all_b_values = sorted(all_b_values)
-        if len(all_b_values) > 15:  # If there are too many values
-            # Choose about 10-15 representative values
-            if max(all_b_values) / min(all_b_values) > 100:
-                # If range is wide, use logarithmic scale for markers
-                log_ticks = np.geomspace(min(all_b_values), max(all_b_values), num=12)
-                tick_positions = [closest_value(all_b_values, x) for x in log_ticks]
-            else:
-                # If range is narrow, evenly space the markers
-                step = max(1, len(all_b_values) // 12)
-                tick_positions = all_b_values[::step]
-                # Always include first and last values
-                if all_b_values[0] not in tick_positions:
-                    tick_positions = [all_b_values[0]] + tick_positions
-                if all_b_values[-1] not in tick_positions:
-                    tick_positions.append(all_b_values[-1])
-        else:
-            # If few values, display all
-            tick_positions = all_b_values
+        all_b_values_sorted = sorted([b for b in list(all_b_values_set) if b > 0]) 
         
-        # Set tick positions and labels
-        plt.xticks(tick_positions, [str(int(x)) for x in tick_positions])
+        preliminary_ticks = []
+        if not all_b_values_sorted:
+            pass 
+        elif len(all_b_values_sorted) > 15:  
+            min_val = min(all_b_values_sorted) 
+            max_val = max(all_b_values_sorted)
+            
+            num_desired_ticks = 12 
+
+            if max_val / min_val > 50: 
+                log_ticks_ideal = np.geomspace(min_val, max_val, num=num_desired_ticks)
+                selected_ticks_set = set()
+                for lt_ideal in log_ticks_ideal:
+                    closest = closest_value(all_b_values_sorted, lt_ideal)
+                    selected_ticks_set.add(closest)
+                preliminary_ticks = sorted(list(selected_ticks_set))
+            else: 
+                step = max(1, len(all_b_values_sorted) // num_desired_ticks)
+                preliminary_ticks = all_b_values_sorted[::step]
+                if all_b_values_sorted[0] not in preliminary_ticks:
+                    preliminary_ticks = [all_b_values_sorted[0]] + preliminary_ticks
+                if all_b_values_sorted[-1] not in preliminary_ticks:
+                    preliminary_ticks.append(all_b_values_sorted[-1])
+                preliminary_ticks = sorted(list(set(preliminary_ticks))) 
+        else: 
+            preliminary_ticks = list(all_b_values_sorted)
         
-        # Add vertical grid at B marker points
+        final_tick_positions = [] # Renamed to avoid confusion
+        if preliminary_ticks:
+            if len(preliminary_ticks) <= 7: 
+                final_tick_positions = preliminary_ticks
+            else: 
+                MIN_TICK_RATIO_B = 1.15  
+
+                final_tick_positions.append(preliminary_ticks[0])
+                for i in range(1, len(preliminary_ticks)):
+                    if preliminary_ticks[i] / final_tick_positions[-1] >= MIN_TICK_RATIO_B:
+                        final_tick_positions.append(preliminary_ticks[i])
+                
+                if preliminary_ticks[-1] not in final_tick_positions:
+                    if preliminary_ticks[-1] / final_tick_positions[-1] >= MIN_TICK_RATIO_B:
+                        final_tick_positions.append(preliminary_ticks[-1])
+                    elif preliminary_ticks[-1] > final_tick_positions[-1]: 
+                        final_tick_positions[-1] = preliminary_ticks[-1]
+        
+        if final_tick_positions:
+            plt.xticks(final_tick_positions, [str(int(x)) for x in final_tick_positions])
+            
+            # After setting ticks, iterate again to plot markers only at these tick positions for B
+            for dataset_type in dataset_types:
+                if dataset_type not in results_dict or results_dict[dataset_type] is None or results_dict[dataset_type].empty:
+                    continue
+                
+                plot_df_for_markers = results_dict[dataset_type].sort_values(by=original_param_name)
+                # Filter points that are in final_tick_positions
+                points_to_mark = plot_df_for_markers[plot_df_for_markers[original_param_name].isin(final_tick_positions)]
+                
+                if not points_to_mark.empty:
+                    plt.scatter(points_to_mark[original_param_name], points_to_mark[metric],
+                                marker=markers.get(dataset_type, 'o'),
+                                color=colors.get(dataset_type, 'black'),
+                                s=50, # Adjust marker size if needed
+                                zorder=5) # Ensure markers are on top of lines but below best point
+
         plt.grid(True, which='both', axis='x', linestyle='--', alpha=0.7)
-    else:
-        # For other parameters
-        plt.grid(True, linestyle='--', alpha=0.7)
 
     plot_title = title if title else f"Sensitivity comparison of {metric} to {display_param_name} across dataset types"
     plt.title(plot_title, fontsize=14)
@@ -169,7 +216,11 @@ def generate_comparison_plots(model_class, dataset_name, dataset_types, best_par
     os.makedirs(plot_output_dir, exist_ok=True)
 
     # Create K-fold cross-validation 
-    kf = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
+    if dataset_name == 'colon':
+        n_splits = 5
+    else:
+        n_splits = 10
+    kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
     
     # Dictionary to store data for each parameter
     tau_results_dict = {}
@@ -185,8 +236,6 @@ def generate_comparison_plots(model_class, dataset_name, dataset_types, best_par
     
     # Dictionary to store X, y data for each dataset_type to avoid reloading
     datasets = {}
-    
-    # Load data for each dataset_type
     for dataset_type in dataset_types:
         print(f"  Loading data for {dataset_name} (type: {dataset_type})...")
         try:
@@ -194,72 +243,124 @@ def generate_comparison_plots(model_class, dataset_name, dataset_types, best_par
             if X.shape[0] > 0 and X.shape[1] > 0:
                 datasets[dataset_type] = (X, y)
                 
-                # Determine B values based on number of features
                 max_features = X.shape[1]
-                best_B = best_params_dict.get('B')
-                B_PLOT_VALUES = determine_B_values(max_features, best_B)
                 
-                # Get best parameters
                 if dataset_type in best_params_dict:
                     best_params = best_params_dict[dataset_type]
                     
-                    # --- Scan tau with fixed C and B ---
-                    print(f"  Generating tau data for {dataset_type}...")
-                    best_C = best_params.get('C', 1.0)
-                    best_B = best_params.get('B', max_features//2 if max_features > 1 else 1)
-                    results_tau = []
-                    
-                    for tau_val in TAU_PLOT_VALUES:
-                        current_params = {'C': best_C, 'B': best_B, 'tau': tau_val}
-                        for p_name, p_val in best_params.items():
-                            if p_name not in current_params:
-                                current_params[p_name] = p_val
+                    fixed_param_C = best_params.get('C')
+                    fixed_param_B = best_params.get('B') 
+                    fixed_param_tau = best_params.get('tau')
+
+                    # --- Define B_scan_values_for_loop for the B parameter scan ---
+                    current_B_scan_values = set()
+                    if fixed_param_B is not None:
+                        try:
+                            fixed_param_B_int = int(round(float(fixed_param_B)))
+                            if 1 <= fixed_param_B_int <= max_features:
+                                current_B_scan_values.add(fixed_param_B_int)
+                        except ValueError:
+                            print(f"Warning: Could not convert fixed_param_B '{fixed_param_B}' to int for {dataset_type}")
+
+
+                    if max_features > 0:
+                        # Add logarithmically spaced points
+                        # Adjust num_points based on max_features to avoid too many points for small max_features
+                        num_log_points = 10 
+                        if max_features == 1:
+                            current_B_scan_values.add(1)
+                        else:
+                            # Ensure start is 1, endpoint is max_features
+                            # Number of points in geomspace should not exceed max_features
+                            actual_num_log_points = min(num_log_points, max_features)
+                            if actual_num_log_points > 0 : # geomspace requires num > 0
+                                log_spaced_points = np.geomspace(1, max_features, num=actual_num_log_points, endpoint=True)
+                                for p in log_spaced_points:
+                                    p_int = int(round(p))
+                                    if 1 <= p_int <= max_features: # Ensure within bounds
+                                        current_B_scan_values.add(p_int)
                         
-                        cv_result = run_cv_for_params(model_class, current_params, X, y, kf)
-                        if cv_result and cv_result['metrics']['auc']:
-                            mean_auc = np.mean(cv_result['metrics']['auc'])
-                            std_auc = np.std(cv_result['metrics']['auc'])
-                            results_tau.append({'tau': tau_val, 'auc_mean': mean_auc, 'auc_std': std_auc})
+                        # Add some specific small feature counts if not already present
+                        small_b_options = [1, 2, 5, 10, 15, 20, min(50, max_features), min(100, max_features)] 
+                        for sbv in small_b_options:
+                            if sbv <= max_features and sbv > 0: # Ensure sbv is positive
+                                current_B_scan_values.add(sbv)
+                        
+                        current_B_scan_values.add(max_features) # Always include max_features itself
+
+                    B_scan_values_for_loop = sorted([b for b in list(current_B_scan_values) if b > 0]) # Ensure positive and sort
+                    
+                    # Fallback if list is empty but should not be
+                    if not B_scan_values_for_loop and max_features > 0:
+                        if fixed_param_B is not None:
+                            try:
+                                fixed_param_B_int = int(round(float(fixed_param_B)))
+                                if 1 <= fixed_param_B_int <= max_features:
+                                    B_scan_values_for_loop = [fixed_param_B_int]
+                                else:
+                                    B_scan_values_for_loop = [max_features]
+                            except ValueError:
+                                B_scan_values_for_loop = [max_features]
+                        else:
+                            B_scan_values_for_loop = [max_features]
+                    elif not B_scan_values_for_loop and max_features == 0:
+                         B_scan_values_for_loop = [1] # Should ideally not happen if X.shape[1]>0
+
+                    # --- Scan tau with fixed C and B ---
+                    print(f"  Generating tau data for {dataset_type} (fixed C={fixed_param_C}, fixed B={fixed_param_B})...")
+                    results_tau = []
+                    if fixed_param_C is not None and fixed_param_B is not None:
+                        for tau_val in TAU_PLOT_VALUES:
+                            current_params = {'C': fixed_param_C, 'B': fixed_param_B, 'tau': tau_val}
+                            for p_name, p_val in best_params.items():
+                                if p_name not in current_params: # Add other params from best_params if they exist
+                                    current_params[p_name] = p_val
+                            
+                            cv_result = run_cv_for_params(model_class, current_params, X, y, kf)
+                            if cv_result and cv_result['metrics']['auc']:
+                                mean_auc = np.mean(cv_result['metrics']['auc'])
+                                std_auc = np.std(cv_result['metrics']['auc'])
+                                results_tau.append({'tau': tau_val, 'auc_mean': mean_auc, 'auc_std': std_auc})
                     
                     if results_tau:
                         tau_results_dict[dataset_type] = pd.DataFrame(results_tau)
                     
                     # --- Scan C with fixed tau and B ---
-                    print(f"  Generating C data for {dataset_type}...")
-                    best_tau = best_params.get('tau', 0.5)
+                    print(f"  Generating C data for {dataset_type} (fixed tau={fixed_param_tau}, fixed B={fixed_param_B})...")
                     results_C = []
-                    
-                    for c_val in C_PLOT_VALUES:
-                        current_params = {'C': c_val, 'B': best_B, 'tau': best_tau}
-                        for p_name, p_val in best_params.items():
-                            if p_name not in current_params:
-                                current_params[p_name] = p_val
-                        
-                        cv_result = run_cv_for_params(model_class, current_params, X, y, kf)
-                        if cv_result and cv_result['metrics']['auc']:
-                            mean_auc = np.mean(cv_result['metrics']['auc'])
-                            std_auc = np.std(cv_result['metrics']['auc'])
-                            results_C.append({'C': c_val, 'auc_mean': mean_auc, 'auc_std': std_auc})
+                    if fixed_param_tau is not None and fixed_param_B is not None:
+                        for c_val in C_PLOT_VALUES:
+                            current_params = {'C': c_val, 'B': fixed_param_B, 'tau': fixed_param_tau}
+                            for p_name, p_val in best_params.items():
+                                if p_name not in current_params:
+                                    current_params[p_name] = p_val
+                            
+                            cv_result = run_cv_for_params(model_class, current_params, X, y, kf)
+                            if cv_result and cv_result['metrics']['auc']:
+                                mean_auc = np.mean(cv_result['metrics']['auc'])
+                                std_auc = np.std(cv_result['metrics']['auc'])
+                                results_C.append({'C': c_val, 'auc_mean': mean_auc, 'auc_std': std_auc})
                     
                     if results_C:
                         C_results_dict[dataset_type] = pd.DataFrame(results_C)
                     
                     # --- Scan B with fixed C and tau ---
-                    print(f"  Generating B data for {dataset_type}...")
+                    print(f"  Generating B data for {dataset_type} (fixed C={fixed_param_C}, fixed tau={fixed_param_tau})...")
+                    print(f"    Scanning B values: {B_scan_values_for_loop}") # Log the B values being scanned
                     results_B = []
-                    
-                    for b_val in B_PLOT_VALUES:
-                        current_params = {'C': best_C, 'B': b_val, 'tau': best_tau}
-                        for p_name, p_val in best_params.items():
-                            if p_name not in current_params:
-                                current_params[p_name] = p_val
-                        
-                        cv_result = run_cv_for_params(model_class, current_params, X, y, kf)
-                        if cv_result and cv_result['metrics']['auc']:
-                            mean_auc = np.mean(cv_result['metrics']['auc'])
-                            std_auc = np.std(cv_result['metrics']['auc'])
-                            avg_num_features = np.mean(cv_result['metrics']['num_features'])
-                            results_B.append({'B': b_val, 'auc_mean': mean_auc, 'auc_std': std_auc, 'num_features_mean': avg_num_features})
+                    if fixed_param_C is not None and fixed_param_tau is not None:
+                        for b_val in B_scan_values_for_loop: # Use the dynamically generated list
+                            current_params = {'C': fixed_param_C, 'B': b_val, 'tau': fixed_param_tau}
+                            for p_name, p_val in best_params.items():
+                                if p_name not in current_params:
+                                    current_params[p_name] = p_val
+                            
+                            cv_result = run_cv_for_params(model_class, current_params, X, y, kf)
+                            if cv_result and cv_result['metrics']['auc']:
+                                mean_auc = np.mean(cv_result['metrics']['auc'])
+                                std_auc = np.std(cv_result['metrics']['auc'])
+                                avg_num_features = np.mean(cv_result['metrics']['num_features']) if 'num_features' in cv_result['metrics'] else b_val
+                                results_B.append({'B': b_val, 'auc_mean': mean_auc, 'auc_std': std_auc, 'num_features_mean': avg_num_features})
                     
                     if results_B:
                         B_results_dict[dataset_type] = pd.DataFrame(results_B).dropna(subset=['auc_mean'])
@@ -297,70 +398,6 @@ def generate_comparison_plots(model_class, dataset_name, dataset_types, best_par
         )
         
     print(f"Completed drawing comparison charts for {dataset_name}")
-
-def determine_B_values(max_features, best_B=None):
-    """Function to determine B values based on the number of features with more points"""
-    _candidate_B_values = []
-    
-    # Always start with B=1
-    _candidate_B_values.append(1)
-    
-    if max_features <= 0:
-        return [1]
-    elif max_features == 1:
-        return [1]
-    elif max_features <= 15:
-        # For small datasets, use all integer values 
-        _candidate_B_values = list(range(1, max_features + 1))
-    elif max_features <= 35:
-        # Add B=2 and B=3 to increase density at the beginning
-        _candidate_B_values.extend([2, 3])
-        # Add points in the middle range
-        _candidate_B_values.extend(list(range(min(5, max_features), max_features + 1, max(1, max_features // 10))))
-        # Add points by percentage
-        for p in [0.2, 0.4, 0.6, 0.8]:
-            b_val = int(round(p * max_features))
-            if b_val >= 1:
-                _candidate_B_values.append(b_val)
-    elif max_features <= 70:
-        # Add more points at the beginning
-        _candidate_B_values.extend([2, 3, 5, 7])
-        # Points in the middle range
-        _candidate_B_values.extend(list(range(min(10, max_features), max_features + 1, max(1, max_features // 12))))
-        # Add points by percentage
-        for p in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
-            b_val = int(round(p * max_features))
-            if b_val >= 1:
-                _candidate_B_values.append(b_val)
-    else:
-        # For large datasets, need more points at the beginning
-        _candidate_B_values.extend([2, 3, 5, 7, 10, 15, 20, 25, 30, 40, 50])
-        
-        # Add more percentage points
-        percent_points = [0.01, 0.02, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95]
-        for p in percent_points:
-            b_val = int(round(p * max_features))
-            if b_val >= 1:
-                _candidate_B_values.append(b_val)
-        
-        # Add logarithmic points
-        if max_features > 100:
-            # Increase number of logarithmic points to 8
-            log_points = np.geomspace(min(20, max_features-1), 
-                                      max_features-1 if max_features > 1 else 1, 
-                                      num=8, dtype=int)
-            _candidate_B_values.extend(log_points.tolist())
-
-    # Always include max_features
-    _candidate_B_values.append(max_features)
-    
-    # Ensure best_B is included if provided
-    if best_B is not None and 1 <= best_B <= max_features and best_B not in _candidate_B_values:
-        _candidate_B_values.append(best_B)
-        print(f"Adding best_B={best_B} from Excel file to B scan list")
-    
-    # Remove duplicates and sort
-    return sorted(list(set(b for b in _candidate_B_values if 1 <= b <= max_features)))
 
 def main_compare_dataset_types():
     parser = argparse.ArgumentParser(description="Compare performance between dataset types for PinFSSVM.")
@@ -402,13 +439,11 @@ def main_compare_dataset_types():
     print(f"Loaded {len(results_df_all)} results from Excel.")
 
     target_model_name = PinFSSVM.__name__
-    expected_type_of_model_in_csv = "Not noise"  # Keep as in original code
     
     # Filter results for the specified dataset
     dataset_results = results_df_all[
         (results_df_all['Model'] == target_model_name) 
-        # (results_df_all['Type of model'] == expected_type_of_model_in_csv) 
-        # (results_df_all['Dataset'] == args.dataset_name)
+
     ]
     
     if dataset_results.empty:
@@ -425,7 +460,7 @@ def main_compare_dataset_types():
     best_params_dict = {}
     for excel_type, code_type in type_mapping.items():
         if code_type in args.dataset_types:  # Only process requested dataset types
-            type_results = dataset_results[dataset_results['Type of model'] == excel_type]
+            type_results = dataset_results[dataset_results['Type of dataset'] == excel_type]
             if not type_results.empty:
                 # Get row with highest Average AUC
                 if 'Average AUC' in type_results.columns:
