@@ -487,7 +487,7 @@ if __name__ == '__main__':
 # Datasets to test
     data_config = [
         {
-            'dataset_name': 'diabetes',
+            'dataset_name': 'cleveland',
             'dataset_types': ['original', 'noise', 'outlier', 'both']
         }
     ]
