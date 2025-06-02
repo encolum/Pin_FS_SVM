@@ -18,7 +18,7 @@ from src.models.pinball_svm import PinballSVM
 from src.models.fisher_svm import FisherSVM
 from src.models.rfe_svm import RFESVM
 import matplotlib.pyplot as plt 
-
+from joblib import Parallel, delayed
 
 
 def save_auc_for_wilcoxon(model_class, dataset_name, dataset_type, best_params, 
@@ -331,15 +331,19 @@ def run_grid_search(model_class, param_values, dataset_name, dataset_type,
         if fixed_params:
             current_params.update(fixed_params)
         param_combinations.append(current_params)
-    
+    num_parallel_jobs = 20
+    def run_cv_for_single_param(params_evaluated_in_job):
+        cv_results_from_func = run_cv_for_params(
+            model_class, params_evaluated_in_job, X, y, kf
+        )
+        return params_evaluated_in_job, cv_results_from_func
+    parallel_execution_results = Parallel(n_jobs=num_parallel_jobs, verbose=10, backend='loky')(
+        delayed(run_cv_for_single_param)(p_combo) for p_combo in param_combinations
+    )
     # Evaluate each parameter combination
-    for params in param_combinations:
+    for params, cv_results in parallel_execution_results:
         # Create a parameter key for saving
-        param_key = "_".join([f"{k}{v}" for k, v in params.items()])
-        
-        # Cross-validation for current parameters
-        cv_results = run_cv_for_params(model_class, params, X, y, kf)
-        
+
         if cv_results:
             cv_metrics = cv_results['metrics']
             mean_cv_accuracy = np.mean(cv_metrics['accuracy'])
@@ -347,6 +351,7 @@ def run_grid_search(model_class, param_values, dataset_name, dataset_type,
             mean_f1_score = np.mean(cv_metrics['f1_score'])
             mean_g_mean = np.mean(cv_metrics['g_mean'])
             # Print results
+            param_key = "_".join([f"{k}{v}" for k, v in params.items()])
             param_str = ", ".join([f"{k}={v}" for k, v in params.items()])
             print(f"  {param_str}: Acc={mean_cv_accuracy:.4f}, AUC={mean_cv_auc:.4f}, F1={mean_f1_score:.4f}, G-Mean={mean_g_mean:.4f}")
             
@@ -511,7 +516,8 @@ if __name__ == '__main__':
             'model_class': MILP1,
             'param_grid': {
                 'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-                'B': [i for i in range(1, n+1)]       # B is max number of features
+                'B': [i for i in range(1, n+1)],     # B is max number of features
+                'cpu_threads': [1],  
             }
         },
         {
@@ -519,7 +525,8 @@ if __name__ == '__main__':
             'param_grid': {
                 'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
                 'tau': [0.1, 0.5, 1.0],            # Pinball loss parameter
-                'B': [i for i in range(1, n+1)]       # B is max number of features
+                'B': [i for i in range(1, n+1)],       # B is max number of features
+                'cpu_threads': [1],
             },
     
         },
@@ -527,7 +534,8 @@ if __name__ == '__main__':
             'model_class': PinballSVM,
             'param_grid': {
                 'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-                'tau': [0.1, 0.5, 1.0]             # Pinball loss parameter
+                'tau': [0.1, 0.5, 1.0],           
+                'cpu_threads': [1], 
             }
         },
         {
