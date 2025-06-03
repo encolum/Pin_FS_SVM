@@ -52,29 +52,6 @@ class FisherSVM:
         for j in range(n):
             opt.add_constraint(w[j] <= v[j])
             opt.add_constraint(-w[j] <= v[j])
-
-        # # sol = opt.solve()
-        # opt_mod = Model(name='L2-SVM')
-        
-        # # Get dimensions
-        # m, n = X.shape
-        
-        # # Define decision variables
-        # w = opt_mod.continuous_var_list(n, name='w')
-        # b = opt_mod.continuous_var(name='b')
-        # xi = opt_mod.continuous_var_list(m, lb=0, name='xi')
-        
-        # # Define objective function
-        # opt_mod.minimize(0.5 * opt_mod.sum(w[j] ** 2 for j in range(n)) + 
-        #                  self.C * opt_mod.sum(xi[i] for i in range(m)))
-        
-        # # Add constraints
-        # for i in range(m):
-        #     opt_mod.add_constraint(y[i] * (opt_mod.sum(w[j] * X[i, j] for j in range(n)) + b) >= 1 - xi[i])
-        
-        # # Set time limit if specified
-        # if self.time_limit is not None:
-        #     opt_mod.set_time_limit(self.time_limit)
         
         # Solve the model
         sol = opt.solve()

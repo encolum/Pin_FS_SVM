@@ -9,7 +9,7 @@ class PinballSVM:
     A robust SVM model using pinball loss function
     """
     
-    def __init__(self, C=1.0, tau=0.5, time_limit=None):
+    def __init__(self, C=1.0, tau=0.5, time_limit=None, cpu_threads=None):
         """
         Initialize Pinball SVM model
         
@@ -25,6 +25,7 @@ class PinballSVM:
         self.C = C
         self.tau = tau
         self.time_limit = time_limit
+        self.cpu_threads = cpu_threads
         self.w = None
         self.b = None
         self.train_time = None
@@ -52,7 +53,8 @@ class PinballSVM:
         model = Model(name='Pinball-SVM')
         if self.time_limit:
             model.set_time_limit(self.time_limit)
-        
+        if self.cpu_threads:
+            model.context.cplex_parameters.threads = self.cpu_threads
         # Define decision variables
         w = model.continuous_var_list(n, name='w')
         b = model.continuous_var(name='b')

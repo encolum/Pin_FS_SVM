@@ -8,7 +8,7 @@ class MILP1:
     Mixed Integer Linear Programming SVM 1 (MILP1) - feature selection SVM based on L1-norm
     """
     
-    def __init__(self, B=None, C=None, l_bound=-2, u_bound=2, time_limit=None):
+    def __init__(self, B=None, C=None, l_bound=-2, u_bound=2, time_limit=None, cpu_threads = None):
         """
         Initialize MILP1 model
         
@@ -32,6 +32,7 @@ class MILP1:
         self.time_limit = time_limit
         self.w = None
         self.b = None
+        self.cpu_threads = cpu_threads
         self.v = None  # Binary variables for feature selection
         self.train_time = None
     
@@ -59,7 +60,8 @@ class MILP1:
         model = Model(name='MILP1')
         if self.time_limit:
             model.set_time_limit(self.time_limit)
-        
+        if self.cpu_threads:
+            model.context.cplex_parameters.threads = self.cpu_threads
         # Define decision variables
         w = model.continuous_var_list(n, name='w')
         b = model.continuous_var(name='b')
