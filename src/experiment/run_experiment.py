@@ -390,10 +390,10 @@ def run_grid_search(model_class, param_values, dataset_name, dataset_type,
         )
         
         # Save detailed metrics
-        save_detailed_metrics(
-            model_class, dataset_name, dataset_type, 
-            all_param_metrics, output_dir
-        )
+        # save_detailed_metrics(
+        #     model_class, dataset_name, dataset_type, 
+        #     all_param_metrics, output_dir
+        # )
         # Save AUC scores for Wilcoxon test
         save_auc_for_wilcoxon(
             model_class, dataset_name, dataset_type, 
@@ -483,7 +483,7 @@ def run_experiment(models_config, datasets_config, output_dir='results'):
     results_df.to_excel(results_path, index=False)
     
     print(f"\nSummary results saved to {results_path}")
-    print(f"Detailed metrics saved in {os.path.join(output_dir, 'detailed_metrics')}")
+    # print(f"Detailed metrics saved in {os.path.join(output_dir, 'detailed_metrics')}")
     
     return results_df
 
@@ -492,7 +492,7 @@ if __name__ == '__main__':
 # Datasets to test
     data_config = [
         {
-            'dataset_name': 'cleveland',
+            'dataset_name': 'colon',
             'dataset_types': ['original', 'noise', 'outlier', 'both']
         }
     ]
@@ -506,52 +506,52 @@ if __name__ == '__main__':
                 'C': [2**i for i in range(-3, 6)]  # C from 2^-3 to 2^5
             }
         },
-        {
-            'model_class': L2SVM,
-            'param_grid': {
-                'C': [2**i for i in range(-3, 6)]  # C from 2^-3 to 2^5
-            }
-        },
-        {
-            'model_class': MILP1,
-            'param_grid': {
-                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-                'B': [i for i in range(1, n+1)],     # B is max number of features
-                'cpu_threads': [1],  
-            }
-        },
-        {
-            'model_class': PinFSSVM,
-            'param_grid': {
-                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-                'tau': [0.1, 0.5, 1.0],            # Pinball loss parameter
-                'B': [i for i in range(1, n+1)],       # B is max number of features
-                'cpu_threads': [1],
-            },
+        # {
+        #     'model_class': L2SVM,
+        #     'param_grid': {
+        #         'C': [2**i for i in range(-3, 6)]  # C from 2^-3 to 2^5
+        #     }
+        # },
+        # {
+        #     'model_class': MILP1,
+        #     'param_grid': {
+        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+        #         'B': [i for i in range(1, n+1)],     # B is max number of features
+        #         'cpu_threads': [1],  
+        #     }
+        # },
+        # {
+        #     'model_class': PinFSSVM,
+        #     'param_grid': {
+        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+        #         'tau': [0.1, 0.5, 1.0],            # Pinball loss parameter
+        #         'B': [i for i in range(1, n+1)],       # B is max number of features
+        #         'cpu_threads': [1],
+        #     },
     
-        },
-        {
-            'model_class': PinballSVM,
-            'param_grid': {
-                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-                'tau': [0.1, 0.5, 1.0],           
-                'cpu_threads': [1], 
-            }
-        },
-        {
-             'model_class': FisherSVM,
-            'param_grid': {
-                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+        # },
+        # {
+        #     'model_class': PinballSVM,
+        #     'param_grid': {
+        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+        #         'tau': [0.1, 0.5, 1.0],           
+        #         'cpu_threads': [1], 
+        #     }
+        # },
+        # {
+        #      'model_class': FisherSVM,
+        #     'param_grid': {
+        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
                
-            }
-        },
-        {
-            'model_class': RFESVM,
-            'param_grid': {
-                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-                'n_features': [n//4,n//2,int(3*n/4)]  # Number of features to select
-            }
-        }
+        #     }
+        # },
+        # {
+        #     'model_class': RFESVM,
+        #     'param_grid': {
+        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+        #         'n_features': [n//4,n//2,int(3*n/4)]  # Number of features to select
+        #     }
+        # }
     ]
 
     
