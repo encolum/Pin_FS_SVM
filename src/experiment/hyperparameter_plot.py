@@ -32,13 +32,19 @@ def plot_parameter_tuning_multi_type(results_dict, param_name, dataset_types, me
         display_param_name = x_axis_label
     os.makedirs(output_dir, exist_ok=True) 
     
-    plt.figure(figsize=figsize)
+    # Tăng kích thước figure và DPI CỰC CAO
+    plt.figure(figsize=(16, 12), dpi=300)  # Tăng DPI từ 150 lên 300
     
     # Colors and markers for each dataset_type
     colors = {'original': 'blue', 'noise': 'red', 'outlier': 'green', 'both': 'purple'}
     markers = {'original': 'o', 'noise': 's', 'outlier': '^', 'both': 'D'}
     legend_handles = []
     legend_texts = [] 
+    
+    plt.rcParams['pdf.fonttype'] = 42  # TrueType fonts
+    plt.rcParams['ps.fonttype'] = 42   # TrueType fonts cho PostScript
+    plt.rcParams['hatch.linewidth'] = 1.0  # Độ dày của hatch pattern
+    
     for dataset_type in dataset_types:
         if dataset_type not in results_dict or results_dict[dataset_type] is None or results_dict[dataset_type].empty:
             continue
@@ -47,60 +53,80 @@ def plot_parameter_tuning_multi_type(results_dict, param_name, dataset_types, me
         
         current_color = colors.get(dataset_type, 'black')
         current_marker = markers.get(dataset_type, 'o')
-
-        # Draw line for current dataset_type (without markers initially if plotting B)
+        
+        # Tăng độ dày của đường line và kích thước marker
         if str(original_param_name).upper() == 'B':
-            line, = plt.plot(plot_df[original_param_name], plot_df[metric], 
-                    linestyle='-', 
-                    color=current_color,
-                    # marker=None, # Markers will be added selectively later for B
-                    )
-        else: # For C and Tau, plot with markers as before
             line, = plt.plot(plot_df[original_param_name], plot_df[metric], 
                     marker=current_marker,
                     linestyle='-', 
                     color=current_color,
+                    linewidth=4.5,  # Tăng độ dày đường
+                    markersize=10
+                    )
+        else: 
+            line, = plt.plot(plot_df[original_param_name], plot_df[metric], 
+                    marker=current_marker,
+                    linestyle='-', 
+                    color=current_color,
+                    linewidth=4.5,  # Tăng độ dày đường
+                    markersize=10,  # Tăng kích thước marker
                     )
         legend_handles.append(line)
         
         # Add standard deviation area if available
         std_col = metric.replace('_mean', '_std')
         if std_col in plot_df.columns:
+            # Định nghĩa pattern cho mỗi dataset type
+            hatch_patterns = {
+                'original': '...',      
+                'noise': '///',         
+                'outlier': '***',       
+                'both': 'xxx'           
+            }
+
+            
             plt.fill_between(
-                plot_df[original_param_name],
-                plot_df[metric] - plot_df[std_col],
-                plot_df[metric] + plot_df[std_col],
-                alpha=0.05,
-                color=current_color
-            )
+            plot_df[original_param_name],
+            plot_df[metric] - plot_df[std_col],
+            plot_df[metric] + plot_df[std_col],
+            alpha=0.15,  # Tăng alpha để rõ hơn
+            color=current_color,
+            hatch=hatch_patterns.get(dataset_type, None),
+            edgecolor=current_color,  
+            linewidth=1.0,  # Tăng linewidth
+            rasterized=False  # Đảm bảo vector format
+        )
+        
+        # CHỈ GIỮ TÊN DATASET TYPE - BỎ THÔNG TIN BEST PARAM
         legend_text_for_type = f"{dataset_type.title()}"
+        
         # Mark the best point for each dataset_type
         if not plot_df[metric].empty:
             try:
                 best_idx = plot_df[metric].idxmax() 
-                best_x_val = plot_df.loc[best_idx, original_param_name] # Renamed to avoid conflict
-                best_y_val = plot_df.loc[best_idx, metric] # Renamed to avoid conflict
+                best_x_val = plot_df.loc[best_idx, original_param_name]
+                best_y_val = plot_df.loc[best_idx, metric]
                 plt.scatter(best_x_val, best_y_val, color=current_color, 
-                           s=120, zorder=10, edgecolor='black', marker=current_marker
+                           s=250, zorder=10, edgecolor='black', marker=current_marker,
+                           linewidth=3  # Tăng độ dày viền marker
                            )
+                # BỎ DÒNG NÀY - không thêm thông tin best param vào legend
                 legend_text_for_type += f" - Best {x_axis_label}={best_x_val:.3f} (AUC={best_y_val:.4f})"
             except ValueError: 
                 print(f"Could not find best point for metric '{metric}' with {dataset_type}")
         legend_texts.append(legend_text_for_type)
-        
     
-    plt.xlabel(x_axis_label, fontsize=12) 
-    plt.ylabel(metric.replace('_', ' ').title(), fontsize=12)
+    # Tăng font size CỰC LỚN cho các label
+    plt.xlabel(x_axis_label, fontsize=32, fontweight='bold') 
+    plt.ylabel(metric.replace('_', ' ').title(), fontsize=32, fontweight='bold')
     
     # Set logarithmic scale if needed
     if str(original_param_name).upper() == 'C': 
         plt.xscale('log', base=2)
-        plt.grid(True, which='both', axis='x', linestyle='--', alpha=0.7)
+        plt.grid(True, which='both', axis='x', linestyle='--', alpha=0.7, linewidth=2)
     elif str(original_param_name).upper() == 'B':
-        # Always use logarithmic scale for B for better display
         plt.xscale('log')
         
-        # Get all B values in the data to set as ticks
         all_b_values_set = set()
         for df_val in results_dict.values(): 
             if df_val is not None and not df_val.empty:
@@ -135,7 +161,7 @@ def plot_parameter_tuning_multi_type(results_dict, param_name, dataset_types, me
         else: 
             preliminary_ticks = list(all_b_values_sorted)
         
-        final_tick_positions = [] # Renamed to avoid confusion
+        final_tick_positions = []
         if preliminary_ticks:
             if len(preliminary_ticks) <= 7: 
                 final_tick_positions = preliminary_ticks
@@ -154,7 +180,7 @@ def plot_parameter_tuning_multi_type(results_dict, param_name, dataset_types, me
                         final_tick_positions[-1] = preliminary_ticks[-1]
         
         if final_tick_positions:
-            plt.xticks(final_tick_positions, [str(int(x)) for x in final_tick_positions])
+            plt.xticks(final_tick_positions, [str(int(x)) for x in final_tick_positions], fontsize=26)
             
             # After setting ticks, iterate again to plot markers only at these tick positions for B
             for dataset_type in dataset_types:
@@ -162,33 +188,69 @@ def plot_parameter_tuning_multi_type(results_dict, param_name, dataset_types, me
                     continue
                 
                 plot_df_for_markers = results_dict[dataset_type].sort_values(by=original_param_name)
-                # Filter points that are in final_tick_positions
                 points_to_mark = plot_df_for_markers[plot_df_for_markers[original_param_name].isin(final_tick_positions)]
                 
                 if not points_to_mark.empty:
                     plt.scatter(points_to_mark[original_param_name], points_to_mark[metric],
                                 marker=markers.get(dataset_type, 'o'),
                                 color=colors.get(dataset_type, 'black'),
-                                s=50, # Adjust marker size if needed
-                                zorder=5) # Ensure markers are on top of lines but below best point
+                                s=120,  # Tăng kích thước marker
+                                zorder=5)
 
-        plt.grid(True, which='both', axis='x', linestyle='--', alpha=0.7)
+        plt.grid(True, which='both', axis='x', linestyle='--', alpha=0.7, linewidth=2)
 
-    plot_title = title if title else f"Sensitivity comparison of {metric} to {display_param_name} across dataset types"
-    plt.title(plot_title, fontsize=14)
+    # BỎ TITLE - Comment out dòng này
+    # plot_title = title if title else f"Sensitivity comparison of {metric} to {display_param_name} across dataset types"
+    # plt.title(plot_title, fontsize=18, fontweight='bold', pad=20)
     
-    plt.grid(True, linestyle='--', alpha=0.7)
+    # Cải thiện grid với độ dày lớn hơn
+    plt.grid(True, linestyle='--', alpha=0.8, linewidth=2)
+    
+    # Font size CỰC LỚN cho tick labels
+    plt.xticks(fontsize=26, fontweight = 'bold')  # Tăng từ 20 lên 26
+    plt.yticks(fontsize=26, fontweight = 'bold')  # Tăng từ 20 lên 26
+    
+    ax = plt.gca()
+    for label in ax.get_xticklabels():
+        label.set_fontweight('bold')
+        label.set_fontsize(26)
+    for label in ax.get_yticklabels():
+        label.set_fontweight('bold')
+        label.set_fontsize(26)
+        
+    # LEGEND CỰC TO VÀ ĐƠN GIẢN
     if legend_handles and legend_texts: 
-        plt.legend(legend_handles, legend_texts, fontsize=10, loc='best')
-    plt.tight_layout()
+        plt.legend(legend_handles, legend_texts, 
+                  fontsize=26,  # Tăng từ 24 lên 28
+                  loc='best',
+                  frameon=True, 
+                  fancybox=True, 
+                  shadow=True,
+                  markerscale=2.0,  # Tăng từ 2.0 lên 2.5
+                  framealpha=0.98,   # Tăng độ đục của background
+                  edgecolor='black',
+                  prop={'weight': 'bold', 'size': 26})  # Thêm bold cho text trong legend
     
-    # Create safe filename
-    safe_title = f'comparison_{param_name}_across_types.png'
-    save_path = os.path.join(output_dir, safe_title)
+    plt.tight_layout(pad=5.0)  # Tăng padding từ 4.0 lên 5.0
+    
+    # Lưu với chất lượng CỰC CAO
+    safe_title = f'comparison_{param_name}_across_types'
+    
+    # Lưu cả PNG và PDF với DPI cực cao
+    png_path = os.path.join(output_dir, f'{safe_title}.png')
+    pdf_path = os.path.join(output_dir, f'{safe_title}.pdf')
     
     try:
-        plt.savefig(save_path, dpi = 300)
-        print(f"Chart saved to {save_path}")
+        # PNG với DPI CỰC CỰC CAO
+        plt.savefig(png_path, dpi=800, bbox_inches='tight', facecolor='white')  # Tăng từ 600 lên 800
+        print(f"PNG chart saved to {png_path}")
+        
+        # PDF vector format với chất lượng cao
+        plt.savefig(pdf_path, format='pdf', bbox_inches='tight', facecolor='white', 
+                    backend ='pdf',
+                   metadata={'Creator': 'matplotlib', 'Title': safe_title})
+        print(f"PDF chart saved to {pdf_path}")
+        
     except Exception as e:
         print(f"Error when saving chart: {e}")
             
