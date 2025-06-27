@@ -94,12 +94,17 @@ class PinFSSVM:
         
         # Solve the model
         solution = model.solve()
-        
+        self.optimization_gap = None
+        self.objective_value = None
+        self.solver_status = None
         # Extract solution
         if solution:
             self.w = np.array([solution.get_value(w[j]) for j in range(n)])
             self.b = solution.get_value(b)
             self.v = np.array([solution.get_value(v[j]) for j in range(n)])
+            self.objective_value = solution.objective_value
+            self.status = solution.solve_details.status
+            self.optimization_gap = model.get_solve_details().gap
         else:
             print("No solution found")
         

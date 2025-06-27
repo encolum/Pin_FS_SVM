@@ -32,8 +32,7 @@ def plot_parameter_tuning_multi_type(results_dict, param_name, dataset_types, me
         display_param_name = x_axis_label
     os.makedirs(output_dir, exist_ok=True) 
     
-    # Tăng kích thước figure và DPI CỰC CAO
-    plt.figure(figsize=(16, 12), dpi=300)  # Tăng DPI từ 150 lên 300
+    plt.figure(figsize=(16, 12), dpi=300)  
     
     # Colors and markers for each dataset_type
     colors = {'original': 'blue', 'noise': 'red', 'outlier': 'green', 'both': 'purple'}
@@ -41,9 +40,9 @@ def plot_parameter_tuning_multi_type(results_dict, param_name, dataset_types, me
     legend_handles = []
     legend_texts = [] 
     
-    plt.rcParams['pdf.fonttype'] = 42  # TrueType fonts
-    plt.rcParams['ps.fonttype'] = 42   # TrueType fonts cho PostScript
-    plt.rcParams['hatch.linewidth'] = 1.0  # Độ dày của hatch pattern
+    plt.rcParams['pdf.fonttype'] = 42  
+    plt.rcParams['ps.fonttype'] = 42   
+    plt.rcParams['hatch.linewidth'] = 1.0  
     
     for dataset_type in dataset_types:
         if dataset_type not in results_dict or results_dict[dataset_type] is None or results_dict[dataset_type].empty:
@@ -54,13 +53,12 @@ def plot_parameter_tuning_multi_type(results_dict, param_name, dataset_types, me
         current_color = colors.get(dataset_type, 'black')
         current_marker = markers.get(dataset_type, 'o')
         
-        # Tăng độ dày của đường line và kích thước marker
         if str(original_param_name).upper() == 'B':
             line, = plt.plot(plot_df[original_param_name], plot_df[metric], 
                     marker=current_marker,
                     linestyle='-', 
                     color=current_color,
-                    linewidth=4.5,  # Tăng độ dày đường
+                    linewidth=4.5,  
                     markersize=10
                     )
         else: 
@@ -68,15 +66,14 @@ def plot_parameter_tuning_multi_type(results_dict, param_name, dataset_types, me
                     marker=current_marker,
                     linestyle='-', 
                     color=current_color,
-                    linewidth=4.5,  # Tăng độ dày đường
-                    markersize=10,  # Tăng kích thước marker
+                    linewidth=4.5, 
+                    markersize=10,  
                     )
         legend_handles.append(line)
         
         # Add standard deviation area if available
         std_col = metric.replace('_mean', '_std')
         if std_col in plot_df.columns:
-            # Định nghĩa pattern cho mỗi dataset type
             hatch_patterns = {
                 'original': '...',      
                 'noise': '///',         
@@ -89,15 +86,14 @@ def plot_parameter_tuning_multi_type(results_dict, param_name, dataset_types, me
             plot_df[original_param_name],
             plot_df[metric] - plot_df[std_col],
             plot_df[metric] + plot_df[std_col],
-            alpha=0.15,  # Tăng alpha để rõ hơn
+            alpha=0.15, 
             color=current_color,
             hatch=hatch_patterns.get(dataset_type, None),
             edgecolor=current_color,  
-            linewidth=1.0,  # Tăng linewidth
-            rasterized=False  # Đảm bảo vector format
+            linewidth=1.0,  
+            rasterized=False  
         )
         
-        # CHỈ GIỮ TÊN DATASET TYPE - BỎ THÔNG TIN BEST PARAM
         legend_text_for_type = f"{dataset_type.title()}"
         
         # Mark the best point for each dataset_type
@@ -108,15 +104,13 @@ def plot_parameter_tuning_multi_type(results_dict, param_name, dataset_types, me
                 best_y_val = plot_df.loc[best_idx, metric]
                 plt.scatter(best_x_val, best_y_val, color=current_color, 
                            s=250, zorder=10, edgecolor='black', marker=current_marker,
-                           linewidth=3  # Tăng độ dày viền marker
+                           linewidth=3  
                            )
-                # BỎ DÒNG NÀY - không thêm thông tin best param vào legend
                 legend_text_for_type += f" - Best {x_axis_label}={best_x_val:.3f} (AUC={best_y_val:.4f})"
             except ValueError: 
                 print(f"Could not find best point for metric '{metric}' with {dataset_type}")
         legend_texts.append(legend_text_for_type)
     
-    # Tăng font size CỰC LỚN cho các label
     plt.xlabel(x_axis_label, fontsize=32, fontweight='bold') 
     plt.ylabel(metric.replace('_', ' ').title(), fontsize=32, fontweight='bold')
     
@@ -166,7 +160,7 @@ def plot_parameter_tuning_multi_type(results_dict, param_name, dataset_types, me
             if len(preliminary_ticks) <= 7: 
                 final_tick_positions = preliminary_ticks
             else: 
-                MIN_TICK_RATIO_B = 1.15  
+                MIN_TICK_RATIO_B = 1.5  
 
                 final_tick_positions.append(preliminary_ticks[0])
                 for i in range(1, len(preliminary_ticks)):
@@ -180,7 +174,22 @@ def plot_parameter_tuning_multi_type(results_dict, param_name, dataset_types, me
                         final_tick_positions[-1] = preliminary_ticks[-1]
         
         if final_tick_positions:
-            plt.xticks(final_tick_positions, [str(int(x)) for x in final_tick_positions], fontsize=26)
+            def format_tick_label(x):
+                if x >= 1000:
+                    return f"{x/1000:.0f}K"  
+                elif x >= 100:
+                    return f"{x:.0f}"
+                else:
+                    return f"{x:.1f}" if x != int(x) else f"{int(x)}"
+            
+            tick_labels = [format_tick_label(x) for x in final_tick_positions]
+            plt.xticks(final_tick_positions, tick_labels, 
+                      fontsize=18,  
+                      fontweight='bold',
+                      )  
+            
+            ax = plt.gca()
+            ax.tick_params(axis='x', which='major', pad=15)  
             
             # After setting ticks, iterate again to plot markers only at these tick positions for B
             for dataset_type in dataset_types:
@@ -199,53 +208,44 @@ def plot_parameter_tuning_multi_type(results_dict, param_name, dataset_types, me
 
         plt.grid(True, which='both', axis='x', linestyle='--', alpha=0.7, linewidth=2)
 
-    # BỎ TITLE - Comment out dòng này
-    # plot_title = title if title else f"Sensitivity comparison of {metric} to {display_param_name} across dataset types"
-    # plt.title(plot_title, fontsize=18, fontweight='bold', pad=20)
+   
     
-    # Cải thiện grid với độ dày lớn hơn
     plt.grid(True, linestyle='--', alpha=0.8, linewidth=2)
     
-    # Font size CỰC LỚN cho tick labels
-    plt.xticks(fontsize=26, fontweight = 'bold')  # Tăng từ 20 lên 26
-    plt.yticks(fontsize=26, fontweight = 'bold')  # Tăng từ 20 lên 26
+    plt.xticks(fontsize=24, fontweight = 'bold')  
+    plt.yticks(fontsize=26, fontweight = 'bold')  
     
     ax = plt.gca()
     for label in ax.get_xticklabels():
         label.set_fontweight('bold')
-        label.set_fontsize(26)
+        label.set_fontsize(24)
     for label in ax.get_yticklabels():
         label.set_fontweight('bold')
         label.set_fontsize(26)
         
-    # LEGEND CỰC TO VÀ ĐƠN GIẢN
     if legend_handles and legend_texts: 
         plt.legend(legend_handles, legend_texts, 
-                  fontsize=26,  # Tăng từ 24 lên 28
+                  fontsize=26, 
                   loc='best',
                   frameon=True, 
                   fancybox=True, 
                   shadow=True,
-                  markerscale=2.0,  # Tăng từ 2.0 lên 2.5
-                  framealpha=0.98,   # Tăng độ đục của background
+                  markerscale=2.0, 
+                  framealpha=0.98,   
                   edgecolor='black',
-                  prop={'weight': 'bold', 'size': 26})  # Thêm bold cho text trong legend
+                  prop={'weight': 'bold', 'size': 26})  
     
-    plt.tight_layout(pad=5.0)  # Tăng padding từ 4.0 lên 5.0
+    plt.tight_layout(pad=5.0)  
     
-    # Lưu với chất lượng CỰC CAO
     safe_title = f'comparison_{param_name}_across_types'
     
-    # Lưu cả PNG và PDF với DPI cực cao
     png_path = os.path.join(output_dir, f'{safe_title}.png')
     pdf_path = os.path.join(output_dir, f'{safe_title}.pdf')
     
     try:
-        # PNG với DPI CỰC CỰC CAO
-        plt.savefig(png_path, dpi=800, bbox_inches='tight', facecolor='white')  # Tăng từ 600 lên 800
+        plt.savefig(png_path, dpi=800, bbox_inches='tight', facecolor='white') 
         print(f"PNG chart saved to {png_path}")
         
-        # PDF vector format với chất lượng cao
         plt.savefig(pdf_path, format='pdf', bbox_inches='tight', facecolor='white', 
                     backend ='pdf',
                    metadata={'Creator': 'matplotlib', 'Title': safe_title})
@@ -291,7 +291,7 @@ def generate_comparison_plots(model_class, dataset_name, dataset_types, best_par
     
     # Define parameter values to scan
     TAU_PLOT_VALUES = [0.1, 0.5, 1.0]
-    C_PLOT_VALUES = [2**i for i in range(-3, 6)]  # 2^-3 to 2^5
+    C_PLOT_VALUES = [2**i for i in range(-3, 6)]  
     
     # Load data for each dataset_type and create charts
     print(f"Creating comparison charts for dataset {dataset_name} with types: {', '.join(dataset_types)}")
@@ -326,31 +326,27 @@ def generate_comparison_plots(model_class, dataset_name, dataset_types, best_par
 
 
                     if max_features > 0:
-                        # Add logarithmically spaced points
-                        # Adjust num_points based on max_features to avoid too many points for small max_features
                         num_log_points = 10 
                         if max_features == 1:
                             current_B_scan_values.add(1)
                         else:
-                            # Ensure start is 1, endpoint is max_features
-                            # Number of points in geomspace should not exceed max_features
                             actual_num_log_points = min(num_log_points, max_features)
-                            if actual_num_log_points > 0 : # geomspace requires num > 0
+                            if actual_num_log_points > 0 : 
                                 log_spaced_points = np.geomspace(1, max_features, num=actual_num_log_points, endpoint=True)
                                 for p in log_spaced_points:
                                     p_int = int(round(p))
-                                    if 1 <= p_int <= max_features: # Ensure within bounds
+                                    if 1 <= p_int <= max_features: 
                                         current_B_scan_values.add(p_int)
                         
                         # Add some specific small feature counts if not already present
                         small_b_options = [1, 2, 5, 10, 15, 20, min(50, max_features), min(100, max_features)] 
                         for sbv in small_b_options:
-                            if sbv <= max_features and sbv > 0: # Ensure sbv is positive
+                            if sbv <= max_features and sbv > 0: 
                                 current_B_scan_values.add(sbv)
                         
-                        current_B_scan_values.add(max_features) # Always include max_features itself
+                        current_B_scan_values.add(max_features) 
 
-                    B_scan_values_for_loop = sorted([b for b in list(current_B_scan_values) if b > 0]) # Ensure positive and sort
+                    B_scan_values_for_loop = sorted([b for b in list(current_B_scan_values) if b > 0]) 
                     
                     # Fallback if list is empty but should not be
                     if not B_scan_values_for_loop and max_features > 0:
@@ -366,7 +362,7 @@ def generate_comparison_plots(model_class, dataset_name, dataset_types, best_par
                         else:
                             B_scan_values_for_loop = [max_features]
                     elif not B_scan_values_for_loop and max_features == 0:
-                         B_scan_values_for_loop = [1] # Should ideally not happen if X.shape[1]>0
+                         B_scan_values_for_loop = [1] 
 
                     # --- Scan tau with fixed C and B ---
                     print(f"  Generating tau data for {dataset_type} (fixed C={fixed_param_C}, fixed B={fixed_param_B})...")
@@ -375,7 +371,7 @@ def generate_comparison_plots(model_class, dataset_name, dataset_types, best_par
                         for tau_val in TAU_PLOT_VALUES:
                             current_params = {'C': fixed_param_C, 'B': fixed_param_B, 'tau': tau_val}
                             for p_name, p_val in best_params.items():
-                                if p_name not in current_params: # Add other params from best_params if they exist
+                                if p_name not in current_params: 
                                     current_params[p_name] = p_val
                             
                             cv_result = run_cv_for_params(model_class, current_params, X, y, kf)
@@ -408,10 +404,10 @@ def generate_comparison_plots(model_class, dataset_name, dataset_types, best_par
                     
                     # --- Scan B with fixed C and tau ---
                     print(f"  Generating B data for {dataset_type} (fixed C={fixed_param_C}, fixed tau={fixed_param_tau})...")
-                    print(f"    Scanning B values: {B_scan_values_for_loop}") # Log the B values being scanned
+                    print(f"    Scanning B values: {B_scan_values_for_loop}") 
                     results_B = []
                     if fixed_param_C is not None and fixed_param_tau is not None:
-                        for b_val in B_scan_values_for_loop: # Use the dynamically generated list
+                        for b_val in B_scan_values_for_loop: 
                             current_params = {'C': fixed_param_C, 'B': b_val, 'tau': fixed_param_tau}
                             for p_name, p_val in best_params.items():
                                 if p_name not in current_params:
@@ -521,7 +517,7 @@ def main_compare_dataset_types():
     # Collect best parameters for each dataset_type
     best_params_dict = {}
     for excel_type, code_type in type_mapping.items():
-        if code_type in args.dataset_types:  # Only process requested dataset types
+        if code_type in args.dataset_types:  
             type_results = dataset_results[dataset_results['Type of dataset'] == excel_type]
             if not type_results.empty:
                 # Get row with highest Average AUC

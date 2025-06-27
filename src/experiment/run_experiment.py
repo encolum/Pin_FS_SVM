@@ -7,7 +7,7 @@ from sklearn.model_selection import KFold, StratifiedKFold
 from sklearn.preprocessing import StandardScaler
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-from src.utils.data_loader import load_dataset, get_shape
+from src.utils.data_loader_2 import load_dataset, get_shape
 from src.utils.preprocessing import standardize_data
 from src.utils.metrics import evaluate_model, count_selected_features
 from src.models.l1_svm import L1SVM
@@ -49,7 +49,9 @@ def save_auc_for_wilcoxon(model_class, dataset_name, dataset_type, best_params,
     dirpath = os.path.join(dataset_dir, dataset_type)
     os.makedirs(dirpath, exist_ok=True)
     # Create filename with model, dataset, and dataset type
-    filename = f"{model_class.__name__}_auc_folds.xlsx"
+    timestamp = datetime.today().date()
+    timestamp2 = time.strftime("%Y%m%d-%H%M%S")
+    filename = f"{model_class.__name__}_auc_folds_{timestamp2}.xlsx"
     filepath = os.path.join(dirpath, filename)
     
     # Prepare data for saving
@@ -479,7 +481,8 @@ def run_experiment(models_config, datasets_config, output_dir='results'):
     # Convert to DataFrame and save
     results_df = pd.DataFrame(all_results)
     timestamp = datetime.today().date()
-    results_path = os.path.join(output_dir, f'experiment_results_{dataset_name}.xlsx')
+    timestamp2 = time.strftime("%Y%m%d-%H%M%S")
+    results_path = os.path.join(output_dir, f'experiment_results_{dataset_name}_{timestamp2}_2.xlsx')
     results_df.to_excel(results_path, index=False)
     
     print(f"\nSummary results saved to {results_path}")
@@ -494,6 +497,8 @@ if __name__ == '__main__':
         {
             'dataset_name': 'colon',
             'dataset_types': ['original', 'noise', 'outlier', 'both']
+            # 'dataset_types': ['both']
+
         }
     ]
     m, n = get_shape(data_config[0]['dataset_name'])
@@ -506,12 +511,12 @@ if __name__ == '__main__':
                 'C': [2**i for i in range(-3, 6)]  # C from 2^-3 to 2^5
             }
         },
-        # {
-        #     'model_class': L2SVM,
-        #     'param_grid': {
-        #         'C': [2**i for i in range(-3, 6)]  # C from 2^-3 to 2^5
-        #     }
-        # },
+        {
+            'model_class': L2SVM,
+            'param_grid': {
+                'C': [2**i for i in range(-3, 6)]  # C from 2^-3 to 2^5
+            }
+        },
         # {
         #     'model_class': MILP1,
         #     'param_grid': {
@@ -530,28 +535,28 @@ if __name__ == '__main__':
         #     },
     
         # },
-        # {
-        #     'model_class': PinballSVM,
-        #     'param_grid': {
-        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-        #         'tau': [0.1, 0.5, 1.0],           
-        #         'cpu_threads': [1], 
-        #     }
-        # },
-        # {
-        #      'model_class': FisherSVM,
-        #     'param_grid': {
-        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+        {
+            'model_class': PinballSVM,
+            'param_grid': {
+                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+                'tau': [0.1, 0.5, 1.0],           
+                'cpu_threads': [1], 
+            }
+        },
+        {
+             'model_class': FisherSVM,
+            'param_grid': {
+                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
                
-        #     }
-        # },
-        # {
-        #     'model_class': RFESVM,
-        #     'param_grid': {
-        #         'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
-        #         'n_features': [n//4,n//2,int(3*n/4)]  # Number of features to select
-        #     }
-        # }
+            }
+        },
+        {
+            'model_class': RFESVM,
+            'param_grid': {
+                'C': [2**i for i in range(-3, 6)],  # C from 2^-3 to 2^5
+                'n_features': [n//4,n//2,int(3*n/4)]  # Number of features to select
+            }
+        }
     ]
 
     

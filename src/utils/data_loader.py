@@ -100,6 +100,7 @@ def load_dataset(dataset_name, dataset_type="original"):
             df = pd.read_csv(file_path, header = None)
             X = df.iloc[:, :-1].values
             y = df.iloc[:, -1].values
+            y = np.where(y == 2, -1, 1) 
         return X, y
         
     except Exception as e:
