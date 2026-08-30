@@ -138,6 +138,7 @@ def run_kernel_search(
         route_progress,
         current.progress,
         offset=first_solve_started - route_started,
+        comparable_full_model_bound=False,
     )
     best = current
     observations = 1
@@ -263,6 +264,7 @@ def run_kernel_search(
             route_progress,
             candidate.progress,
             offset=solve_started - route_started,
+            comparable_full_model_bound=False,
         )
         improved = candidate.objective < best.objective - float(acceptance_epsilon)
         if improved:
@@ -346,6 +348,7 @@ def run_kernel_search(
                     route_progress,
                     refined.progress,
                     offset=refinement_started - route_started,
+                    comparable_full_model_bound=True,
                 )
                 improved = refined.objective < best.objective - float(acceptance_epsilon)
                 if improved:
@@ -441,10 +444,9 @@ def _update_kernel(
     search: SearchState,
     policy: KernelPolicy,
 ) -> set[int]:
-    minimum = max(search.feature_budget, int(np.count_nonzero(incumbent.v)))
+    minimum = max(search.feature_budget, len(incumbent.support))
     target = max(minimum, min(search.total_features, int(target_size)))
-    retained = set(np.flatnonzero(np.asarray(incumbent.v) > 0.5).astype(int).tolist())
-    retained.update(incumbent.support)
+    retained = set(incumbent.support)
     candidates = []
     for feature in features:
         if feature.index in retained:
@@ -520,6 +522,7 @@ def _history_record(
     removed: set[int],
     stagnation: int,
 ) -> dict[str, Any]:
+    gap_scope = "full_model" if iteration == "final_refinement" else "restricted_kernel"
     return {
         "iteration": iteration,
         "kernel_size": len(kernel),
@@ -531,6 +534,7 @@ def _history_record(
         "best_objective": best.objective,
         "best_bound": result.diagnostics.best_bound,
         "gap": result.diagnostics.mip_gap,
+        "gap_scope": gap_scope,
         "node_count": result.diagnostics.node_count,
         "solve_time": result.solve_time,
         "improved": bool(improved),
@@ -547,6 +551,7 @@ def _append_route_progress(
     source: list[SolverProgressRecord],
     *,
     offset: float,
+    comparable_full_model_bound: bool,
 ) -> None:
     global_incumbent = destination[-1].incumbent_objective if destination else None
     node_offset = int(destination[-1].node_count or 0) if destination else 0
@@ -557,12 +562,14 @@ def _append_route_progress(
             global_incumbent = (
                 candidate if global_incumbent is None else min(global_incumbent, candidate)
             )
+        bound = record.best_bound if comparable_full_model_bound else None
+        relative_gap = _full_model_gap(global_incumbent, bound)
         destination.append(
             SolverProgressRecord(
                 elapsed_seconds=max(0.0, offset + record.elapsed_seconds),
                 incumbent_objective=global_incumbent,
-                best_bound=record.best_bound,
-                relative_gap=record.relative_gap,
+                best_bound=bound,
+                relative_gap=relative_gap,
                 node_count=(
                     None if record.node_count is None else node_offset + int(record.node_count)
                 ),
@@ -573,6 +580,16 @@ def _append_route_progress(
                 ),
             )
         )
+
+
+def _full_model_gap(incumbent: float | None, bound: float | None) -> float | None:
+    if incumbent is None or bound is None:
+        return None
+    incumbent = float(incumbent)
+    bound = float(bound)
+    if not np.isfinite(incumbent) or not np.isfinite(bound):
+        return None
+    return max(0.0, (incumbent - bound) / max(abs(incumbent), 1e-12))
 
 
 def _kernel_hash(kernel: set[int]) -> str:

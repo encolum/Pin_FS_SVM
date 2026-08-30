@@ -99,12 +99,16 @@ def result_to_mip_start(
     effort_level: str = "auto",
     name: str = "restricted_solution",
     tolerance: float = 1e-7,
+    active_feature_tolerance: float = 1e-3,
 ) -> MIPStartData:
     """Convert a feasible restricted solution into a validated full-model start."""
-    w = np.asarray(result.coefficients, dtype=float)
-    z = np.asarray(result.z, dtype=float)
-    xi = np.asarray(result.xi, dtype=float)
-    v = np.asarray(result.v, dtype=float)
+    w = np.asarray(result.coefficients, dtype=float).copy()
+    z = np.asarray(result.z, dtype=float).copy()
+    xi = np.asarray(result.xi, dtype=float).copy()
+    v = np.asarray(result.v, dtype=float).copy()
+    active_feature_tolerance = float(active_feature_tolerance)
+    if not np.isfinite(active_feature_tolerance) or active_feature_tolerance <= tolerance:
+        raise ValueError("active_feature_tolerance must be finite and exceed tolerance")
     expected = {
         "coefficients": (w, problem.w_slice.stop - problem.w_slice.start),
         "z": (z, problem.z_slice.stop - problem.z_slice.start),
@@ -126,6 +130,18 @@ def result_to_mip_start(
         raise ValueError("cannot create MIP start: v must be binary")
     if np.any((rounded_v == 0) & (np.abs(w) > tolerance)):
         raise ValueError("cannot create MIP start: v=0 requires w=0")
+    fixed_outside_kernel = problem.upper_bounds[problem.v_slice] <= tolerance
+    if np.any(fixed_outside_kernel & (np.abs(w) > active_feature_tolerance)):
+        raise ValueError(
+            "cannot create MIP start: an active coefficient lies outside the target kernel"
+        )
+    # A binary selector may be one even when its coefficient is zero. Such a
+    # selector carries no active feature and can be safely cleared when the next
+    # restricted kernel fixes it out.
+    repaired_coefficients = fixed_outside_kernel & (np.abs(w) > tolerance)
+    w[fixed_outside_kernel] = 0.0
+    z[fixed_outside_kernel] = 0.0
+    rounded_v[fixed_outside_kernel] = 0.0
     if int(rounded_v.sum()) > problem.feature_budget:
         raise ValueError("cannot create MIP start: selected variables exceed feature budget B")
 
@@ -135,6 +151,27 @@ def result_to_mip_start(
     values[problem.z_slice] = z
     values[problem.xi_slice] = xi
     values[problem.v_slice] = rounded_v
+    if np.any(repaired_coefficients):
+        _repair_slacks(values, problem)
     mip_start = MIPStartData(values=values, effort_level=effort_level, name=name)
     validate_mip_start(mip_start, problem, tolerance=tolerance, check_constraints=True)
     return mip_start
+
+
+def _repair_slacks(values: np.ndarray, problem: PinFSProblemData) -> None:
+    """Recompute the minimum nonnegative slacks after tiny coefficients are dropped."""
+    sample_count = problem.xi_slice.stop - problem.xi_slice.start
+    values[problem.xi_slice] = 0.0
+    for sample in range(sample_count):
+        xi_index = problem.xi_slice.start + sample
+        required = 0.0
+        for row in (2 * sample, 2 * sample + 1):
+            coefficient = float(problem.constraint_matrix[row, xi_index])
+            activity = float((problem.constraint_matrix.getrow(row) @ values).item())
+            lower = float(problem.constraint_lower[row])
+            upper = float(problem.constraint_upper[row])
+            if coefficient > 0 and np.isfinite(lower):
+                required = max(required, (lower - activity) / coefficient)
+            if coefficient < 0 and np.isfinite(upper):
+                required = max(required, (activity - upper) / (-coefficient))
+        values[xi_index] = max(0.0, required)

@@ -40,10 +40,6 @@ def kernel_search_result_row(
         "restricted_solves": int(result.metadata.get("restricted_solves", 0)),
         **progress,
         "final_objective": result.best_result.objective,
-        "final_best_bound": final_record.get(
-            "best_bound", result.best_result.diagnostics.best_bound
-        ),
-        "final_gap": final_record.get("gap", result.best_result.diagnostics.mip_gap),
         "node_count": result.metadata.get(
             "total_node_count",
             final_record.get("node_count", result.best_result.diagnostics.node_count),
@@ -62,9 +58,9 @@ def kernel_search_result_row(
         ),
         "selected_feature_count": len(result.best_result.support),
         "selected_feature_indices": sorted(result.best_result.support),
-        "classification_scope": "optimization_instance",
     }
     if classification:
+        row["classification_scope"] = "outer_test"
         row.update(classification)
     return row
 

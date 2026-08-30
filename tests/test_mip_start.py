@@ -61,6 +61,49 @@ def test_restricted_solution_becomes_feasible_full_model_start(problem_data):
     assert values[full_problem.v_slice].tolist() == [1.0, 0.0]
 
 
+def test_result_to_start_clears_selector_only_features_fixed_outside_next_kernel(
+    problem_data,
+):
+    X, y, _ = problem_data
+    restricted = _restricted_solution(X, y)
+    restricted.v[1] = 1
+    next_problem = build_pin_fs_problem(
+        X,
+        y,
+        B=1,
+        C=5.0,
+        tau=0.5,
+        lower_bound=-5.0,
+        upper_bound=5.0,
+        allowed_features={0},
+    )
+    mip_start = result_to_mip_start(restricted, next_problem)
+    values = validate_mip_start(mip_start, next_problem, check_constraints=True)
+    assert values[next_problem.v_slice].tolist() == [1.0, 0.0]
+
+
+def test_result_to_start_repairs_tiny_dropped_coefficient_and_slacks(problem_data):
+    X, y, _ = problem_data
+    restricted = _restricted_solution(X, y)
+    restricted.coefficients[1] = 5e-4
+    restricted.z[1] = 5e-4
+    restricted.v[1] = 1
+    next_problem = build_pin_fs_problem(
+        X,
+        y,
+        B=1,
+        C=5.0,
+        tau=0.5,
+        lower_bound=-5.0,
+        upper_bound=5.0,
+        allowed_features={0},
+    )
+    mip_start = result_to_mip_start(restricted, next_problem)
+    values = validate_mip_start(mip_start, next_problem, check_constraints=True)
+    assert values[next_problem.w_slice][1] == 0.0
+    assert values[next_problem.v_slice][1] == 0.0
+
+
 def test_malformed_mip_starts_fail_loudly(problem_data):
     _, _, problem = problem_data
     with pytest.raises(ValueError, match="length"):

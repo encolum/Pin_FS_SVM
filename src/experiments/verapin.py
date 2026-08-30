@@ -9,6 +9,7 @@ from time import perf_counter
 from typing import Any
 
 import numpy as np
+from sklearn.model_selection import StratifiedKFold
 
 from src.data.synthetic import generate_synthetic_instance, save_synthetic_instance
 from src.data.loaders import load_dataset
@@ -31,6 +32,7 @@ from src.search.llm_evolution.provider import EnvironmentLLMProvider, MockProvid
 from src.search.llm_evolution.replay import evolution_audit, load_replay_provider
 from src.search.llm_evolution.schemas import PolicyCandidate
 from src.search.objectives import solver_progress_summary
+from src.search.progress import SolverProgressRecord
 from src.search.policies.frozen_verapin import FrozenVeraPinPolicy
 from src.search.policies.handcrafted_adks import ADKSWeights, HandcraftedADKSPolicy
 from src.search.policies.static_ks import StaticKSPolicy
@@ -140,7 +142,13 @@ def validate_verapin_config(config: dict[str, Any], *, command: str) -> None:
             ]
         )
     if command == "evaluate-verapin":
-        required_paths.append("frozen_policy_path")
+        required_paths.extend(
+            [
+                "frozen_policy_path",
+                "classification.outer_folds",
+                "classification.outer_seed",
+            ]
+        )
     unresolved.extend(path for path in required_paths if _get_path(config, path) is None)
     splits = {instance.get("split") for instance in instances}
     if command == "evolve-verapin" and "test" in splits:
@@ -197,6 +205,16 @@ def validate_verapin_config(config: dict[str, Any], *, command: str) -> None:
     if command in {"adks", "evolve-verapin", "evaluate-verapin"}:
         _adks_policy(config)
     if command == "evaluate-verapin":
+        outer_folds = config["classification"]["outer_folds"]
+        outer_seed = config["classification"]["outer_seed"]
+        if (
+            isinstance(outer_folds, bool)
+            or int(outer_folds) != outer_folds
+            or int(outer_folds) < 2
+        ):
+            raise ValueError("classification.outer_folds must be an integer at least 2")
+        if isinstance(outer_seed, bool) or int(outer_seed) != outer_seed:
+            raise ValueError("classification.outer_seed must be an integer")
         verify_policy_file(config["frozen_policy_path"])
 
 
@@ -242,12 +260,10 @@ def run_adks(config: dict[str, Any]) -> Path:
         details[f"{instance.instance_id}:cold_cplex"] = cold_detail
         result = _run_engine(instance, config, _adks_policy(config))
         route_rows.append(
-            kernel_search_result_row(
+            _kernel_route_row(
                 result,
                 route="handcrafted_adks",
-                instance_id=instance.instance_id,
-                classification=_classification(instance, result.best_result),
-                reference_objective=float(cold_row["final_objective"]),
+                instance=instance,
             )
         )
         iteration_rows.extend(
@@ -255,6 +271,7 @@ def run_adks(config: dict[str, Any]) -> Path:
             for record in result.history
         )
         details[f"{instance.instance_id}:handcrafted_adks"] = _kernel_detail(result)
+    _apply_common_reference(route_rows, details)
     write_kernel_search_results(run_dir, route_rows, iteration_rows, details)
     _write_run_manifest(
         run_dir,
@@ -310,7 +327,7 @@ def run_verapin_final(config: dict[str, Any]) -> Path:
     """Evaluate cold CPLEX, ADKS, and one frozen policy with no LLM provider."""
     validate_verapin_config(config, command="evaluate-verapin")
     run_dir = _create_run_dir(config, "final")
-    instances = _policy_instances(config, run_dir=run_dir)
+    instances = _policy_instances(config, run_dir=run_dir, outer_evaluation=True)
     candidate = PolicyCandidate.from_dict(read_json(config["frozen_policy_path"]))
     route_rows: list[dict[str, Any]] = []
     iteration_rows: list[dict[str, Any]] = []
@@ -319,7 +336,6 @@ def run_verapin_final(config: dict[str, Any]) -> Path:
         cold_row, cold_detail = _run_cold(instance, config["solver"])
         route_rows.append(cold_row)
         details[f"{instance.instance_id}:cold_cplex"] = cold_detail
-        reference = float(cold_row["final_objective"])
         for route, policy in (
             ("handcrafted_adks", _adks_policy(config)),
             ("verapin_ks", FrozenVeraPinPolicy(candidate)),
@@ -327,12 +343,11 @@ def run_verapin_final(config: dict[str, Any]) -> Path:
             result = _run_engine(instance, config, policy)
             classification = _classification(instance, result.best_result)
             route_rows.append(
-                kernel_search_result_row(
+                _kernel_route_row(
                     result,
                     route=route,
-                    instance_id=instance.instance_id,
+                    instance=instance,
                     classification=classification,
-                    reference_objective=reference,
                 )
             )
             iteration_rows.extend(
@@ -340,6 +355,7 @@ def run_verapin_final(config: dict[str, Any]) -> Path:
                 for record in result.history
             )
             details[f"{instance.instance_id}:{route}"] = _kernel_detail(result)
+    _apply_common_reference(route_rows, details)
     write_kernel_search_results(run_dir, route_rows, iteration_rows, details)
     _write_run_manifest(
         run_dir,
@@ -379,18 +395,18 @@ def _run_kernel_route(
     for instance in instances:
         result = _run_engine(instance, config, policy_factory())
         rows.append(
-            kernel_search_result_row(
+            _kernel_route_row(
                 result,
                 route=route,
-                instance_id=instance.instance_id,
-                classification=_classification(instance, result.best_result),
+                instance=instance,
             )
         )
         iterations.extend(
             {"instance_id": instance.instance_id, "route": route, **record}
             for record in result.history
         )
-        details[instance.instance_id] = _kernel_detail(result)
+        details[f"{instance.instance_id}:{route}"] = _kernel_detail(result)
+    _apply_common_reference(rows, details)
     write_kernel_search_results(run_dir, rows, iterations, details)
     _write_run_manifest(run_dir, config, instances, routes=[route])
     return run_dir
@@ -404,6 +420,7 @@ def _write_validation_baseline_comparison(
     frozen: PolicyCandidate,
 ) -> None:
     rows: list[dict[str, Any]] = []
+    details: dict[str, Any] = {}
     for instance in instances:
         for route, policy in (
             ("handcrafted_adks", _adks_policy(config)),
@@ -411,13 +428,14 @@ def _write_validation_baseline_comparison(
         ):
             result = _run_engine(instance, config, policy)
             rows.append(
-                kernel_search_result_row(
+                _kernel_route_row(
                     result,
                     route=route,
-                    instance_id=instance.instance_id,
-                    classification=_classification(instance, result.best_result),
+                    instance=instance,
                 )
             )
+            details[f"{instance.instance_id}:{route}"] = _kernel_detail(result)
+    _apply_common_reference(rows, details)
     route_integrals = {
         route: float(
             np.mean(
@@ -439,6 +457,82 @@ def _write_validation_baseline_comparison(
             "llm_calls": 0,
         },
     )
+
+
+def _kernel_route_row(
+    result,
+    *,
+    route: str,
+    instance: PolicyInstance,
+    classification: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if classification is None:
+        classification = _classification(instance, result.best_result)
+    row = kernel_search_result_row(
+        result,
+        route=route,
+        instance_id=instance.instance_id,
+        classification=classification,
+    )
+    row.update(_instance_identity(instance))
+    return row
+
+
+def _instance_identity(instance: PolicyInstance) -> dict[str, Any]:
+    identity: dict[str, Any] = {
+        "base_instance_id": instance.base_instance_id or instance.instance_id,
+    }
+    if instance.outer_fold is not None:
+        identity["outer_fold"] = int(instance.outer_fold)
+    return identity
+
+
+def _apply_common_reference(
+    rows: list[dict[str, Any]],
+    details: dict[str, Any],
+) -> None:
+    """Recompute anytime metrics using one best-known objective per instance."""
+    instance_ids = sorted({str(row["instance_id"]) for row in rows})
+    for instance_id in instance_ids:
+        instance_rows = [row for row in rows if str(row["instance_id"]) == instance_id]
+        reference = min(float(row["final_objective"]) for row in instance_rows)
+        for row in instance_rows:
+            key = f"{instance_id}:{row['route']}"
+            if key not in details:
+                raise KeyError(f"missing progress detail for {key}")
+            detail = details[key]
+            trajectory = [
+                SolverProgressRecord(**record) for record in detail.get("progress", [])
+            ]
+            summary = solver_progress_summary(
+                trajectory,
+                horizon=float(detail["total_runtime"]),
+                reference_objective=reference,
+            )
+            row.update(summary)
+            row["primal_integral_reference_objective"] = reference
+            row["primal_integral_reference_scope"] = "best_known_across_routes"
+            row["gap_scope"] = "full_model_only"
+
+
+def _offset_progress_to_route_time(
+    records: list[SolverProgressRecord],
+    total_runtime: float,
+) -> list[SolverProgressRecord]:
+    if not records:
+        return []
+    offset = max(0.0, float(total_runtime) - float(records[-1].elapsed_seconds))
+    return [
+        SolverProgressRecord(
+            elapsed_seconds=offset + float(record.elapsed_seconds),
+            incumbent_objective=record.incumbent_objective,
+            best_bound=record.best_bound,
+            relative_gap=record.relative_gap,
+            node_count=record.node_count,
+            solution_count=record.solution_count,
+        )
+        for record in records
+    ]
 
 
 def _run_engine(instance: PolicyInstance, config: dict[str, Any], policy):
@@ -474,13 +568,16 @@ def _run_cold(
         deadline=started + float(solver["total_time_limit"]),
     )
     runtime = perf_counter() - started
+    route_progress = _offset_progress_to_route_time(result.progress, runtime)
     progress = solver_progress_summary(
-        result.progress,
+        route_progress,
         horizon=runtime,
         reference_objective=result.objective,
     )
+    classification = _classification(instance, result)
     row = {
         "instance_id": instance.instance_id,
+        **_instance_identity(instance),
         "route": "cold_cplex",
         "kernel_policy": "none",
         "initial_kernel_size": instance.X.shape[1],
@@ -501,11 +598,13 @@ def _run_cold(
         "solver_status": result.diagnostics.status,
         "selected_feature_count": len(result.support),
         "selected_feature_indices": sorted(result.support),
-        "classification_scope": "optimization_instance",
-        **_classification(instance, result),
     }
+    if classification:
+        row["classification_scope"] = "outer_test"
+        row.update(classification)
     detail = {
-        "progress": [asdict(record) for record in result.progress],
+        "progress": [asdict(record) for record in route_progress],
+        "total_runtime": runtime,
         "diagnostics": result.diagnostics.to_dict(),
         "coefficients": result.coefficients,
         "intercept": result.intercept,
@@ -515,18 +614,27 @@ def _run_cold(
 
 
 def _classification(instance: PolicyInstance, result) -> dict[str, float]:
+    if instance.X_test is None and instance.y_test is None:
+        return {}
+    if instance.X_test is None or instance.y_test is None:
+        raise ValueError("outer-test features and labels must be provided together")
     predictions = np.where(
-        instance.X @ result.coefficients + result.intercept >= 0,
+        instance.X_test @ result.coefficients + result.intercept >= 0,
         1,
         -1,
     )
-    return classification_metrics(instance.y, predictions)
+    return classification_metrics(instance.y_test, predictions)
 
 
-def _policy_instances(config: dict[str, Any], *, run_dir: Path) -> list[PolicyInstance]:
+def _policy_instances(
+    config: dict[str, Any],
+    *,
+    run_dir: Path,
+    outer_evaluation: bool = False,
+) -> list[PolicyInstance]:
     problem = config["problem"]
     bounds = problem["coefficient_bounds"]
-    result = []
+    result: list[PolicyInstance] = []
     for specification in config["instances"]:
         if specification.get("kind", "synthetic") == "dataset":
             raw_X, y = load_dataset(
@@ -535,23 +643,23 @@ def _policy_instances(config: dict[str, Any], *, run_dir: Path) -> list[PolicyIn
                 data_root=specification.get("data_root"),
                 validate_classes=specification.get("condition") == "clean",
             )
-            X, _, _ = fit_transform_training(raw_X)
             feature_budget = int(specification["feature_budget"])
-            if feature_budget < 1 or feature_budget > X.shape[1]:
+            if feature_budget < 1 or feature_budget > raw_X.shape[1]:
                 raise ValueError(
                     f"instance {specification['id']} has invalid feature_budget={feature_budget}"
                 )
+            source_metadata = {
+                "instance_id": specification["id"],
+                "kind": "dataset",
+                "dataset": specification["dataset"],
+                "condition": specification["condition"],
+                "split": specification["split"],
+                "shape": list(raw_X.shape),
+                "feature_budget": feature_budget,
+            }
             write_json(
                 run_dir / "instances" / f"{specification['id']}.json",
-                {
-                    "instance_id": specification["id"],
-                    "kind": "dataset",
-                    "dataset": specification["dataset"],
-                    "condition": specification["condition"],
-                    "split": specification["split"],
-                    "shape": list(X.shape),
-                    "feature_budget": feature_budget,
-                },
+                source_metadata,
             )
         else:
             generated = generate_synthetic_instance(
@@ -563,20 +671,114 @@ def _policy_instances(config: dict[str, Any], *, run_dir: Path) -> list[PolicyIn
                 run_dir / "instances",
                 instance_id=str(specification["id"]),
             )
-            X, y, feature_budget = generated.X, generated.y, generated.feature_budget
-        result.append(
+            raw_X, y, feature_budget = (
+                generated.X,
+                generated.y,
+                generated.feature_budget,
+            )
+        if outer_evaluation:
+            result.extend(
+                _outer_fold_instances(
+                    raw_X,
+                    y,
+                    feature_budget=feature_budget,
+                    specification=specification,
+                    problem=problem,
+                    run_dir=run_dir,
+                    outer_folds=int(config["classification"]["outer_folds"]),
+                    outer_seed=int(config["classification"]["outer_seed"]),
+                )
+            )
+        else:
+            X = raw_X
+            if specification.get("kind", "synthetic") == "dataset":
+                X, _, _ = fit_transform_training(raw_X)
+            result.append(
+                PolicyInstance(
+                    instance_id=str(specification["id"]),
+                    split=str(specification["split"]),
+                    X=X,
+                    y=y,
+                    B=feature_budget,
+                    C=float(problem["C"]),
+                    tau=float(problem["tau"]),
+                    coefficient_bounds=(
+                        float(bounds["lower"]),
+                        float(bounds["upper"]),
+                    ),
+                    base_instance_id=str(specification["id"]),
+                )
+            )
+    return result
+
+
+def _outer_fold_instances(
+    raw_X: np.ndarray,
+    y: np.ndarray,
+    *,
+    feature_budget: int,
+    specification: dict[str, Any],
+    problem: dict[str, Any],
+    run_dir: Path,
+    outer_folds: int,
+    outer_seed: int,
+) -> list[PolicyInstance]:
+    bounds = problem["coefficient_bounds"]
+    splitter = StratifiedKFold(
+        n_splits=outer_folds,
+        shuffle=True,
+        random_state=outer_seed,
+    )
+    base_id = str(specification["id"])
+    instances: list[PolicyInstance] = []
+    try:
+        folds = list(splitter.split(raw_X, y))
+    except ValueError as exc:
+        raise ValueError(f"instance {base_id} cannot form outer folds: {exc}") from exc
+    for outer_fold, (train_indices, test_indices) in enumerate(folds, start=1):
+        X_train, transformed, scaler = fit_transform_training(
+            raw_X[train_indices],
+            raw_X[test_indices],
+        )
+        X_test = transformed[0]
+        instance_id = f"{base_id}:outer-{outer_fold}"
+        write_json(
+            run_dir / "instances" / f"{base_id}-outer-{outer_fold}.json",
+            {
+                "instance_id": instance_id,
+                "base_instance_id": base_id,
+                "outer_fold": outer_fold,
+                "outer_folds": outer_folds,
+                "outer_seed": outer_seed,
+                "train_indices": train_indices,
+                "test_indices": test_indices,
+                "train_shape": list(X_train.shape),
+                "test_shape": list(X_test.shape),
+                "scaler_mean": scaler.mean_,
+                "scaler_scale": scaler.scale_,
+                "preprocessing": "standard_scaler_fit_on_outer_train_only",
+            },
+        )
+        instances.append(
             PolicyInstance(
-                instance_id=str(specification["id"]),
+                instance_id=instance_id,
                 split=str(specification["split"]),
-                X=X,
-                y=y,
+                X=X_train,
+                y=np.asarray(y[train_indices], dtype=int),
                 B=feature_budget,
                 C=float(problem["C"]),
                 tau=float(problem["tau"]),
-                coefficient_bounds=(float(bounds["lower"]), float(bounds["upper"])),
+                coefficient_bounds=(
+                    float(bounds["lower"]),
+                    float(bounds["upper"]),
+                ),
+                X_test=X_test,
+                y_test=np.asarray(y[test_indices], dtype=int),
+                base_instance_id=base_id,
+                outer_fold=outer_fold,
             )
         )
-    return result
+    return instances
 
 
 def _engine_config(config: dict[str, Any]) -> dict[str, Any]:
@@ -644,6 +846,8 @@ def _candidate(value: Any, config: dict[str, Any]) -> PolicyCandidate:
 
 def _kernel_detail(result) -> dict[str, Any]:
     return {
+        "progress": list(result.metadata.get("route_progress", [])),
+        "total_runtime": result.total_runtime,
         "history": result.history,
         "metadata": result.metadata,
         "best": {
@@ -682,8 +886,17 @@ def _write_run_manifest(
             "instances": [
                 {
                     "instance_id": instance.instance_id,
+                    "base_instance_id": instance.base_instance_id
+                    or instance.instance_id,
+                    "outer_fold": instance.outer_fold,
                     "split": instance.split,
                     "instance_hash": instance.instance_hash,
+                    "optimization_partition": "outer_train"
+                    if instance.X_test is not None
+                    else "full_instance",
+                    "classification_partition": "outer_test"
+                    if instance.X_test is not None
+                    else None,
                 }
                 for instance in instances
             ],

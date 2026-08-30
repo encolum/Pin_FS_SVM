@@ -20,6 +20,7 @@
       "add_slack_association": null, "add_nonredundancy": null, "add_selection_stability": null
     }
   },
+  "classification": {"outer_folds": null, "outer_seed": null},
   "frozen_policy_path": "artifacts_verapin/policies/frozen_verapin_policy.json",
   "output": {"root": "results_verapin"}
 }

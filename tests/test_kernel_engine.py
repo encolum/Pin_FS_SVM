@@ -1,8 +1,10 @@
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
 from src.data.synthetic import generate_synthetic_instance
-from src.search.kernel_engine import run_kernel_search
+from src.search.kernel_engine import _update_kernel, run_kernel_search
 from src.search.policies.static_ks import StaticKSPolicy
 
 
@@ -67,6 +69,33 @@ def test_kernel_engine_retains_incumbent_and_never_worsens_best():
     )
     assert result.total_runtime <= 3.05
     assert result.metadata["time_budget_exceeded"] is False
+    assert all(
+        record["best_bound"] is None and record["relative_gap"] is None
+        for record in result.metadata["route_progress"]
+    )
+    assert all(record["gap_scope"] == "restricted_kernel" for record in result.history)
+
+
+def test_kernel_retains_active_support_but_not_selector_only_features():
+    class IndexPolicy:
+        def keep_score(self, feature, search):
+            return -float(feature.index)
+
+        def add_score(self, feature, search):
+            return -float(feature.index)
+
+    incumbent = SimpleNamespace(v=np.array([1, 1, 0]), support={0})
+    search = SimpleNamespace(feature_budget=1, total_features=3)
+    features = [SimpleNamespace(index=index) for index in range(3)]
+    kernel = _update_kernel(
+        features,
+        current_kernel={0, 1},
+        incumbent=incumbent,
+        target_size=1,
+        search=search,
+        policy=IndexPolicy(),
+    )
+    assert kernel == {0}
 
 
 def test_final_full_refinement_removes_all_kernel_restrictions():
@@ -75,6 +104,10 @@ def test_final_full_refinement_removes_all_kernel_restrictions():
     assert result.history[-1]["iteration"] == "final_refinement"
     assert result.metadata["final_full_refinement"] is True
     assert result.best_result.objective <= result.history[0]["objective"] + 1e-7
+    assert result.history[-1]["gap_scope"] == "full_model"
+    assert all(
+        record["gap_scope"] == "restricted_kernel" for record in result.history[:-1]
+    )
 
 
 def test_kernel_search_is_deterministic_for_fixed_policy_and_seed():

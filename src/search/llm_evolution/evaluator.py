@@ -32,6 +32,10 @@ class PolicyInstance:
     tau: float
     coefficient_bounds: tuple[float, float]
     reference_objective: float | None = None
+    X_test: np.ndarray | None = None
+    y_test: np.ndarray | None = None
+    base_instance_id: str | None = None
+    outer_fold: int | None = None
 
     @property
     def instance_hash(self) -> str:
@@ -40,8 +44,21 @@ class PolicyInstance:
         digest.update(self.split.encode("utf-8"))
         digest.update(np.ascontiguousarray(self.X).view(np.uint8))
         digest.update(np.ascontiguousarray(self.y).view(np.uint8))
+        if self.X_test is not None:
+            digest.update(np.ascontiguousarray(self.X_test).view(np.uint8))
+        if self.y_test is not None:
+            digest.update(np.ascontiguousarray(self.y_test).view(np.uint8))
         digest.update(
-            repr((self.B, self.C, self.tau, self.coefficient_bounds)).encode("utf-8")
+            repr(
+                (
+                    self.B,
+                    self.C,
+                    self.tau,
+                    self.coefficient_bounds,
+                    self.base_instance_id,
+                    self.outer_fold,
+                )
+            ).encode("utf-8")
         )
         return digest.hexdigest()
 
@@ -177,9 +194,7 @@ def evaluate_policy(
                 SolverProgressRecord(**record)
                 for record in result.metadata.get("route_progress", [])
             ]
-            final_gap = result.best_result.diagnostics.mip_gap
-            if final_gap is None:
-                final_gap = trajectory[-1].relative_gap if trajectory else None
+            final_gap = trajectory[-1].relative_gap if trajectory else None
             overhead = float(result.metadata.get("signal_overhead", 0.0)) + float(
                 result.metadata.get("policy_overhead", 0.0)
             ) + float(result.metadata.get("lp_relaxation_overhead", 0.0)) + float(
@@ -189,11 +204,6 @@ def evaluate_policy(
                 trajectory,
                 horizon=result.total_runtime,
                 reference_objective=instance.reference_objective,
-            )
-            predictions = np.where(
-                instance.X @ result.best_result.coefficients + result.best_result.intercept >= 0,
-                1,
-                -1,
             )
             row = {
                 "instance_id": instance.instance_id,
@@ -208,8 +218,17 @@ def evaluate_policy(
                 "total_runtime": result.total_runtime,
                 "selected_feature_count": len(result.best_result.support),
                 "selected_feature_indices": sorted(result.best_result.support),
-                **classification_metrics(instance.y, predictions),
             }
+            if instance.X_test is not None and instance.y_test is not None:
+                predictions = np.where(
+                    instance.X_test @ result.best_result.coefficients
+                    + result.best_result.intercept
+                    >= 0,
+                    1,
+                    -1,
+                )
+                row.update(classification_metrics(instance.y_test, predictions))
+                row["classification_scope"] = "outer_test"
         except Exception as exc:
             row = {
                 "instance_id": instance.instance_id,

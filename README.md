@@ -94,6 +94,12 @@ The CLI lists every unresolved field before creating a run directory. Record the
 choices in `AUTHOR_DECISIONS_REQUIRED.md` and the relevant config before running;
 the repository does not silently invent scientific parameters.
 
+Final classification metrics use deterministic stratified outer folds. Every
+route is optimized on the outer-training partition, preprocessing is fitted only
+there, and Balanced Accuracy/F1/Accuracy/G-mean are computed on the untouched
+outer-test partition. In-sample optimization data are not reported as
+classification test results.
+
 ## VeraPin-KS solver and search API
 
 `src.search` exposes the paper formulation as reusable solver data and supports
@@ -145,6 +151,12 @@ frozen VeraPin policy. Policy formulas live outside the engine, incumbent suppor
 is retained, and signal, LP-relaxation, policy, MIP-start, restricted-solve, and
 final-refinement time all count against one wall-clock budget. Static and ADKS
 weights are deterministic and config-driven.
+
+Restricted-kernel bounds and MIP gaps are retained only as per-iteration local
+diagnostics; they are never spliced into the full-model trajectory. Route-level
+gap fields remain empty until a final unrestricted refinement supplies a comparable
+full-model bound. After all comparison routes finish, primal integrals are
+recomputed with the same best-known feasible objective for that instance.
 
 VeraPin candidates are typed JSON expression trees. The bounded interpreter allows
 only arithmetic, clipping, and conditionals over an explicit signal allowlist. It

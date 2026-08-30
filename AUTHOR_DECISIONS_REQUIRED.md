@@ -57,6 +57,7 @@ intentionally `null` in `configs/hardness.yaml`, `configs/static_ks_pilot.yaml`,
 - Static-KS kernel/bucket sizes and every handcrafted ADKS weight/adaptation value;
 - evolution population size, generations, parent/candidate counts, diversity
   threshold, fitness weights/scales, and target gap;
+- outer classification fold count and deterministic split seed for final evaluation;
 - real LLM provider/model, temperature, and offline token/API cost budget.
 
 The CLI validates these gates before creating a run directory. Held-out evaluation

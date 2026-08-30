@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from src.experiments.verapin import run_static_kernel_search, run_verapin_final
-from src.utils.serialization import write_json
+from src.utils.serialization import read_json, write_json
 
 
 def _instance(split):
@@ -103,6 +103,10 @@ def test_static_workflow_persists_route_and_iteration_schemas(tmp_path):
     assert (run_dir / "route_results.csv").is_file()
     assert (run_dir / "iteration_results.csv").is_file()
     assert (run_dir / "instances" / "tiny-train.json").is_file()
+    with (run_dir / "route_results.csv").open(newline="", encoding="utf-8") as stream:
+        row = next(csv.DictReader(stream))
+    assert "classification_scope" not in row
+    assert "balanced_accuracy" not in row
 
 
 def test_final_workflow_uses_three_routes_without_constructing_llm_provider(tmp_path, monkeypatch):
@@ -121,10 +125,42 @@ def test_final_workflow_uses_three_routes_without_constructing_llm_provider(tmp_
         "solver": {"backend": "cplex", "threads": 1, "total_time_limit": 2.0, "subproblem_time_limit": 0.5, "mip_gap": 0.0},
         "search": _search(),
         "adks_policy": _adks(),
+        "classification": {"outer_folds": 2, "outer_seed": 19},
         "frozen_policy_path": str(policy_path),
         "output": {"root": str(tmp_path / "final")},
     }
     run_dir = run_verapin_final(config)
     with (run_dir / "route_results.csv").open(newline="", encoding="utf-8") as stream:
-        routes = {row["route"] for row in csv.DictReader(stream)}
+        rows = list(csv.DictReader(stream))
+    routes = {row["route"] for row in rows}
     assert routes == {"cold_cplex", "handcrafted_adks", "verapin_ks"}
+    assert len(rows) == 6
+    assert {row["outer_fold"] for row in rows} == {"1", "2"}
+    assert {row["classification_scope"] for row in rows} == {"outer_test"}
+    assert all(row["balanced_accuracy"] for row in rows)
+    for fold in {"1", "2"}:
+        fold_rows = [row for row in rows if row["outer_fold"] == fold]
+        references = {row["primal_integral_reference_objective"] for row in fold_rows}
+        assert len(references) == 1
+        assert float(next(iter(references))) == pytest.approx(
+            min(float(row["final_objective"]) for row in fold_rows)
+        )
+        assert next(row for row in fold_rows if row["route"] == "cold_cplex")[
+            "final_gap"
+        ]
+        assert all(
+            row["final_gap"] == ""
+            for row in fold_rows
+            if row["route"] != "cold_cplex"
+        )
+    for fold in (1, 2):
+        fold_manifest = read_json(
+            run_dir / "instances" / f"tiny-test-outer-{fold}.json"
+        )
+        train = set(fold_manifest["train_indices"])
+        test = set(fold_manifest["test_indices"])
+        assert train.isdisjoint(test)
+        assert len(train | test) == 20
+        assert fold_manifest["preprocessing"] == (
+            "standard_scaler_fit_on_outer_train_only"
+        )
