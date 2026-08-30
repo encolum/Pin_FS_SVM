@@ -1,0 +1,65 @@
+{
+  "description": "Full corrected benchmark. Corruption parameters are intentionally unresolved pending author confirmation.",
+  "datasets": ["diabetes", "cleveland", "wdbc", "ionosphere", "sonar", "colon"],
+  "models": [
+    "l2_svm",
+    "l1_svm",
+    "pin_svm",
+    "budgeted_milp_svm",
+    "fisher_l1_svm",
+    "l1_svm_rfe",
+    "pin_fs_svm"
+  ],
+  "conditions": ["clean", "mixed", "high_margin", "combined"],
+  "metrics": ["balanced_accuracy", "weighted_f1", "accuracy", "gmean"],
+  "outer_folds": 5,
+  "inner_folds": 3,
+  "seeds": [42],
+  "selection_tolerance": 1e-12,
+  "C_grid": [0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 32],
+  "tau_grid": [0.1, 0.5, 1.0],
+  "B_grid": "auto",
+  "small_budget_exhaustive_max": 30,
+  "require_author_confirmation": true,
+  "coefficient_bounds": {
+    "lower": -2.0,
+    "upper": 2.0,
+    "author_confirmed": false,
+    "provenance": "Preserved from the legacy implementation; author confirmation is required because the manuscript omits the numeric bounds."
+  },
+  "solver": {"backend": "cplex", "threads": 1, "time_limit": null, "mip_gap": null, "max_iter": 4000},
+  "parallelism": {"max_workers": 20, "allow_nested_parallelism": false},
+  "corrupt_outer_test": false,
+  "corruption": {
+    "mixed": {
+      "label_flip_rate": null,
+      "additive_rate": null,
+      "multiplicative_rate": null,
+      "additive_std": null,
+      "multiplicative_std": null
+    },
+    "high_margin": {"flip_rate": null, "reference_C": null},
+    "combined": {
+      "mixed": {
+        "label_flip_rate": null,
+        "additive_rate": null,
+        "multiplicative_rate": null,
+        "additive_std": null,
+        "multiplicative_std": null
+      },
+      "high_margin": {"flip_rate": null, "reference_C": null}
+    }
+  },
+  "statistics": {
+    "enabled": false,
+    "metric": "balanced_accuracy",
+    "alternative": "greater",
+    "zero_method": "wilcox",
+    "method": "auto",
+    "correction": "benjamini_hochberg",
+    "alpha": 0.05,
+    "pairing_unit": "outer_fold",
+    "correction_family": "all_declared_pairwise_comparisons"
+  },
+  "output": {"root": "results_v2"}
+}
