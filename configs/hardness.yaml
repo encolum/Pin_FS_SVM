@@ -1,0 +1,13 @@
+{
+  "description": "Cold-CPLEX synthetic hardness benchmark. Nulls are explicit author-decision gates.",
+  "instances": [
+    {"id": "hard-100", "split": null, "n_samples": null, "n_features": 100, "informative_ratio": null, "redundant_ratio": null, "correlation_strength": null, "positive_class_fraction": null, "label_noise_rate": null, "outlier_sample_rate": null, "outlier_feature_rate": null, "outlier_scale": null, "feature_budget_ratio": null, "seed": null},
+    {"id": "hard-500", "split": null, "n_samples": null, "n_features": 500, "informative_ratio": null, "redundant_ratio": null, "correlation_strength": null, "positive_class_fraction": null, "label_noise_rate": null, "outlier_sample_rate": null, "outlier_feature_rate": null, "outlier_scale": null, "feature_budget_ratio": null, "seed": null},
+    {"id": "hard-1000", "split": null, "n_samples": null, "n_features": 1000, "informative_ratio": null, "redundant_ratio": null, "correlation_strength": null, "positive_class_fraction": null, "label_noise_rate": null, "outlier_sample_rate": null, "outlier_feature_rate": null, "outlier_scale": null, "feature_budget_ratio": null, "seed": null},
+    {"id": "hard-2000", "split": null, "n_samples": null, "n_features": 2000, "informative_ratio": null, "redundant_ratio": null, "correlation_strength": null, "positive_class_fraction": null, "label_noise_rate": null, "outlier_sample_rate": null, "outlier_feature_rate": null, "outlier_scale": null, "feature_budget_ratio": null, "seed": null},
+    {"id": "hard-5000", "split": null, "n_samples": null, "n_features": 5000, "informative_ratio": null, "redundant_ratio": null, "correlation_strength": null, "positive_class_fraction": null, "label_noise_rate": null, "outlier_sample_rate": null, "outlier_feature_rate": null, "outlier_scale": null, "feature_budget_ratio": null, "seed": null}
+  ],
+  "problem": {"C": null, "tau": null, "coefficient_bounds": {"lower": null, "upper": null}},
+  "solver": {"backend": "cplex", "threads": 1, "total_time_limit": null, "mip_gap": null},
+  "output": {"root": "results_verapin"}
+}

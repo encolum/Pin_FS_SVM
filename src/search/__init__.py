@@ -7,18 +7,35 @@ from .progress import (
     time_to_target_gap,
     validate_progress_trajectory,
 )
+from .kernel_engine import run_kernel_search
+from .objectives import primal_integral, solver_progress_summary
 from .restricted_solver import build_pin_fs_problem, solve_restricted_pin_fs
-from .states import PinFSProblemData, RestrictedSolveResult
+from .signals import LPRelaxationResult, solve_pin_fs_relaxation
+from .states import (
+    FeatureState,
+    KernelSearchResult,
+    PinFSProblemData,
+    RestrictedSolveResult,
+    SearchState,
+)
 
 __all__ = [
     "MIPStartData",
+    "FeatureState",
+    "KernelSearchResult",
+    "LPRelaxationResult",
     "PinFSProblemData",
     "RestrictedSolveResult",
+    "SearchState",
     "SolverProgressRecord",
     "build_pin_fs_problem",
     "first_incumbent_time",
+    "primal_integral",
     "result_to_mip_start",
     "solve_restricted_pin_fs",
+    "solve_pin_fs_relaxation",
+    "solver_progress_summary",
+    "run_kernel_search",
     "time_to_target_gap",
     "validate_mip_start",
     "validate_progress_trajectory",

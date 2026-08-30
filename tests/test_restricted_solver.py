@@ -1,3 +1,5 @@
+from time import perf_counter
+
 import numpy as np
 import pytest
 
@@ -69,6 +71,21 @@ def test_problem_builder_fixes_binary_bounds_outside_kernel(small_problem):
         allowed_features={0},
     )
     assert problem.upper_bounds[problem.v_slice].tolist() == [1.0, 0.0, 0.0]
+
+
+def test_problem_builder_rejects_an_expired_wall_clock_deadline(small_problem):
+    X, y = small_problem
+    with pytest.raises(RuntimeError, match="wall-clock budget"):
+        build_pin_fs_problem(
+            X,
+            y,
+            B=1,
+            C=5.0,
+            tau=0.5,
+            lower_bound=-5.0,
+            upper_bound=5.0,
+            deadline=perf_counter() - 1.0,
+        )
 
 
 def test_restricted_scipy_solve_keeps_outside_features_inactive(small_problem):

@@ -5,10 +5,12 @@ detailed_metrics/
 .venv/
 .pytest_cache/
 Dataset/
-data/
+/data/
 results_v2/
 artifacts_v2/
 logs_v2/
+results_verapin/
+artifacts_verapin/
 tmp/
 *.log
 *.png

@@ -41,3 +41,24 @@ appear in the manuscript.
 Do not mark `coefficient_bounds.author_confirmed` as true, fill the full
 corruption profiles, or launch `main.py run --confirm-full-run` until the choices
 above have been reviewed by an author.
+
+## VeraPin-KS scientific configuration
+
+The full VeraPin infrastructure is implemented, but the following values are
+intentionally `null` in `configs/hardness.yaml`, `configs/static_ks_pilot.yaml`,
+`configs/adks_pilot.yaml`, `configs/verapin_evolution.yaml`, and
+`configs/verapin_final.yaml` until an author records a decision:
+
+- synthetic sample counts, informative and redundant ratios, correlation,
+  imbalance, label noise, outlier severity,
+  and feature-budget ratios;
+- Pin-FS `B` derivation, `C`, `tau`, and coefficient bounds for these studies;
+- CPLEX total/subproblem limits and target MIP gap;
+- Static-KS kernel/bucket sizes and every handcrafted ADKS weight/adaptation value;
+- evolution population size, generations, parent/candidate counts, diversity
+  threshold, fitness weights/scales, and target gap;
+- real LLM provider/model, temperature, and offline token/API cost budget.
+
+The CLI validates these gates before creating a run directory. Held-out evaluation
+also requires `--confirm-full-run` and loads only a frozen JSON policy; it never
+constructs an LLM provider.

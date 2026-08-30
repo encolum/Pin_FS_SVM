@@ -70,7 +70,31 @@ prints its experiment matrix and estimated fit count before training.
 Sensitivity and ablation experiments use `configs/sensitivity.yaml` and
 `configs/ablation.yaml`, respectively.
 
-## Restricted Pin-FS solver API (VeraPin-KS Milestone 1)
+VeraPin-KS infrastructure commands are separate from the manuscript benchmark:
+
+```bash
+# Cold-CPLEX hardness profiling
+.venv/bin/python main.py hardness --config configs/hardness.yaml
+
+# Static KS and handcrafted ADKS pilots
+.venv/bin/python main.py kernel-search --config configs/static_ks_pilot.yaml
+.venv/bin/python main.py adks --config configs/adks_pilot.yaml
+
+# Train-only evolution, validation-only freezing, and replay audit
+.venv/bin/python main.py evolve-verapin --config configs/verapin_evolution.yaml
+.venv/bin/python main.py replay-evolution --run-dir results_verapin/<run_id>
+
+# Held-out comparison; this path never creates an LLM provider
+.venv/bin/python main.py evaluate-verapin \
+  --config configs/verapin_final.yaml --confirm-full-run
+```
+
+The distributed VeraPin configs deliberately contain `null` author-decision gates.
+The CLI lists every unresolved field before creating a run directory. Record the
+choices in `AUTHOR_DECISIONS_REQUIRED.md` and the relevant config before running;
+the repository does not silently invent scientific parameters.
+
+## VeraPin-KS solver and search API
 
 `src.search` exposes the paper formulation as reusable solver data and supports
 feature-kernel restrictions without changing the original objective or constraints.
@@ -116,6 +140,20 @@ The returned result includes the complete decision vector split into `w`, `b`,
 incumbent/bound/gap/node trajectory. Malformed starts raise a validation error and
 are never silently ignored. The original `PinFSSVM.fit(X, y)` API remains unchanged.
 
+The same `run_kernel_search` engine executes Static KS, handcrafted ADKS, and a
+frozen VeraPin policy. Policy formulas live outside the engine, incumbent support
+is retained, and signal, LP-relaxation, policy, MIP-start, restricted-solve, and
+final-refinement time all count against one wall-clock budget. Static and ADKS
+weights are deterministic and config-driven.
+
+VeraPin candidates are typed JSON expression trees. The bounded interpreter allows
+only arithmetic, clipping, and conditionals over an explicit signal allowlist. It
+does not execute generated Python or expose imports, files, network, subprocesses,
+reflection, or loops. Evolution prompts contain training summaries only; policy
+selection uses validation instances; `evaluate-verapin` loads the frozen JSON and
+makes no LLM call. Prompts, responses, token usage, latency, estimated cost,
+checkpoints, and cache keys are retained for audit/replay.
+
 ## Experimental protocol
 
 - Full experiments use 5 outer and 3 inner stratified folds.
@@ -139,6 +177,8 @@ configs/                        pilot, full, sensitivity, ablation, and dataset 
 src/data/                       loading, validation, partitioning, and corruption
 src/models/corrected/           corrected proposed and baseline estimators
 src/search/                     restricted Pin-FS builder, MIP starts, and progress
+src/search/policies/            Static KS, handcrafted ADKS, and frozen VeraPin
+src/search/llm_evolution/       safe DSL, providers, evaluation, cache, evolution
 src/evaluation/                 nested cross-validation and metrics
 src/experiments/                configuration, search, registry, and run orchestration
 src/statistics/                 post-hoc statistical analysis
@@ -150,6 +190,8 @@ tests/                          automated validation of the corrected pipeline
 Generated run directories are created under `results_v2/` and are intentionally
 untracked. Cross-run reports and logs may likewise be written under `artifacts_v2/`
 and `logs_v2/` without becoming part of the source repository.
+VeraPin runs and frozen-policy artifacts use `results_verapin/` and
+`artifacts_verapin/`, which are also intentionally untracked.
 
 ## Verification
 

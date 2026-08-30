@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -60,3 +60,69 @@ class RestrictedSolveResult:
     solve_time: float
     kernel: set[int]
     mip_start_status: str | None
+
+
+@dataclass(frozen=True)
+class FeatureState:
+    """Normalized train-only signals exposed to every kernel policy."""
+
+    index: int
+    in_kernel: bool
+    is_selected: bool
+    abs_coefficient: float
+
+    fisher_score: float
+    mutual_information: float
+
+    mean_abs_correlation: float
+    max_abs_correlation: float
+
+    lp_activation: float
+    lp_abs_coefficient: float
+
+    slack_association: float
+    selection_frequency: float
+
+    inactive_iterations: int
+    kernel_age: int
+
+    l1_abs_coefficient: float = 0.0
+    pin_abs_coefficient: float = 0.0
+    support_redundancy: float = 0.0
+
+
+@dataclass(frozen=True)
+class SearchState:
+    """Search-wide state visible to policies; it contains no held-out metrics."""
+
+    iteration: int
+    current_objective: float
+    best_objective: float
+
+    current_gap: float | None
+    best_bound: float | None
+
+    kernel_size: int
+    feature_budget: int
+    total_features: int
+
+    stagnation_iterations: int
+    elapsed_seconds: float
+    remaining_seconds: float
+
+    C: float
+    tau: float
+    improved_last_iteration: bool = False
+
+
+@dataclass
+class KernelSearchResult:
+    """Complete outcome and audit history from one kernel-search route."""
+
+    best_result: RestrictedSolveResult
+    history: list[dict]
+    final_kernel: set[int]
+    total_runtime: float
+    initial_kernel: set[int]
+    method: str
+    metadata: dict = field(default_factory=dict)

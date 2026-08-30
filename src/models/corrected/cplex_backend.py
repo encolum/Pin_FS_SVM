@@ -42,6 +42,7 @@ def solve_docplex(
     model_name: str = "corrected-model",
     mip_start: Any | None = None,
     collect_progress: bool = False,
+    deadline: float | None = None,
 ) -> CplexResult:
     """Solve a linear or convex quadratic model through local DOcplex/CPLEX."""
     try:
@@ -69,6 +70,8 @@ def solve_docplex(
     try:
         variables = []
         for index in range(c.size):
+            if index % 128 == 0:
+                _check_deadline(deadline)
             if integer[index]:
                 variable = model.binary_var(name=f"x_{index}")
                 variable.lb = max(0.0, float(lower[index]))
@@ -80,6 +83,8 @@ def solve_docplex(
                 variables.append(model.continuous_var(lb=lb, ub=ub, name=f"x_{index}"))
 
         for row in range(matrix.shape[0]):
+            if row % 128 == 0:
+                _check_deadline(deadline)
             start, end = matrix.indptr[row], matrix.indptr[row + 1]
             expression = model.sum(
                 float(value) * variables[int(column)]
@@ -97,8 +102,19 @@ def solve_docplex(
         model.minimize(objective)
 
         model.parameters.threads = int(threads)
-        if time_limit is not None:
-            model.parameters.timelimit = float(time_limit)
+        _check_deadline(deadline)
+        effective_time_limit = time_limit
+        if deadline is not None:
+            remaining = float(deadline) - perf_counter()
+            if remaining <= 1e-6:
+                raise RuntimeError("CPLEX model construction exhausted the wall-clock budget")
+            effective_time_limit = (
+                remaining
+                if effective_time_limit is None
+                else min(float(effective_time_limit), remaining)
+            )
+        if effective_time_limit is not None:
+            model.parameters.timelimit = float(effective_time_limit)
         if np.any(integer) and mip_gap is not None:
             model.parameters.mip.tolerances.mipgap = float(mip_gap)
 
@@ -126,6 +142,8 @@ def solve_docplex(
                 raise ValueError("CPLEX rejected the MIP start during model registration")
             mip_start_status = "accepted"
             log_stream = StringIO()
+
+        _check_deadline(deadline)
 
         recorder = None
         if collect_progress and np.any(integer):
@@ -184,6 +202,11 @@ def validate_backend(value: str) -> str:
     if backend not in {"scipy", "cplex"}:
         raise ValueError("solver backend must be 'scipy' or 'cplex'")
     return backend
+
+
+def _check_deadline(deadline: float | None) -> None:
+    if deadline is not None and perf_counter() >= float(deadline):
+        raise RuntimeError("CPLEX model construction exhausted the wall-clock budget")
 
 
 def _status(text: str, *, has_solution: bool, mixed_integer: bool) -> str:

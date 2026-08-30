@@ -47,6 +47,28 @@ def build_parser() -> argparse.ArgumentParser:
 
     plot = subparsers.add_parser("plot", help="plot saved Balanced Accuracy values")
     plot.add_argument("--run-dir", required=True)
+
+    for command, default in (
+        ("hardness", "configs/hardness.yaml"),
+        ("kernel-search", "configs/static_ks_pilot.yaml"),
+        ("adks", "configs/adks_pilot.yaml"),
+    ):
+        sub = subparsers.add_parser(command)
+        sub.add_argument("--config", default=default)
+
+    evolve = subparsers.add_parser("evolve-verapin")
+    evolve.add_argument("--config", default="configs/verapin_evolution.yaml")
+    evolve.add_argument("--resume", metavar="RUN_DIR")
+
+    evaluate = subparsers.add_parser("evaluate-verapin")
+    evaluate.add_argument("--config", default="configs/verapin_final.yaml")
+    evaluate.add_argument("--confirm-full-run", action="store_true")
+
+    verify_policy = subparsers.add_parser("verify-policy")
+    verify_policy.add_argument("--policy", required=True)
+
+    replay = subparsers.add_parser("replay-evolution")
+    replay.add_argument("--run-dir", required=True)
     return parser
 
 
@@ -73,6 +95,56 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "plot":
         print(plot_balanced_accuracy(args.run_dir))
+        return 0
+    if args.command == "verify-policy":
+        from src.experiments.verapin import verify_policy_file
+
+        print(verify_policy_file(args.policy))
+        return 0
+    if args.command == "replay-evolution":
+        from src.experiments.verapin import replay_evolution_audit
+
+        print(replay_evolution_audit(args.run_dir))
+        return 0
+    if args.command in {
+        "hardness",
+        "kernel-search",
+        "adks",
+        "evolve-verapin",
+        "evaluate-verapin",
+    }:
+        from src.experiments.verapin import (
+            run_adks,
+            run_hardness_benchmark,
+            run_static_kernel_search,
+            run_verapin_evolution,
+            run_verapin_final,
+            validate_verapin_config,
+        )
+
+        config = load_config(args.config)
+        try:
+            validate_verapin_config(config, command=args.command)
+        except ValueError as exc:
+            parser.error(str(exc))
+        if args.command == "evaluate-verapin" and not args.confirm_full_run:
+            parser.error("held-out VeraPin evaluation requires --confirm-full-run")
+        print(f"VeraPin command: {args.command}")
+        print(f"Instances: {[item['id'] for item in config['instances']]}")
+        print(f"Solver: {config['solver']}")
+        print(f"Output directory: {config.get('output', {}).get('root', 'results_verapin')}")
+        sys.stdout.flush()
+        if args.command == "hardness":
+            output = run_hardness_benchmark(config)
+        elif args.command == "kernel-search":
+            output = run_static_kernel_search(config)
+        elif args.command == "adks":
+            output = run_adks(config)
+        elif args.command == "evolve-verapin":
+            output = run_verapin_evolution(config, resume_dir=args.resume)
+        else:
+            output = run_verapin_final(config)
+        print(f"Completed VeraPin run: {output}")
         return 0
 
     config = load_config(args.config)

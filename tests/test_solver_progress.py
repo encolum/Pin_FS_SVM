@@ -8,6 +8,7 @@ from src.search import (
     time_to_target_gap,
     validate_progress_trajectory,
 )
+from src.search.objectives import primal_integral
 
 
 def test_progress_helpers_find_incumbent_and_target_gap_times():
@@ -21,6 +22,7 @@ def test_progress_helpers_find_incumbent_and_target_gap_times():
     assert first_incumbent_time(records) == pytest.approx(0.4)
     assert time_to_target_gap(records, 0.20) == pytest.approx(0.9)
     assert time_to_target_gap(records, 0.01) is None
+    assert primal_integral(records, horizon=1.2, reference_objective=10.0) == pytest.approx(0.5)
 
 
 @pytest.mark.parametrize(

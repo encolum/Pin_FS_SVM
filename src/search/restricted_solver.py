@@ -33,8 +33,10 @@ def build_pin_fs_problem(
     lower_bound: float,
     upper_bound: float,
     allowed_features: Iterable[int] | None = None,
+    deadline: float | None = None,
 ) -> PinFSProblemData:
     """Build formulation (29)-(38), optionally fixing ``v_j=0`` outside a kernel."""
+    _check_build_deadline(deadline)
     X, y = validate_training_data(X, y)
     m, n = X.shape
     B = _validate_budget(B, n)
@@ -58,6 +60,8 @@ def build_pin_fs_problem(
     row_upper = np.full(row_count, np.inf)
     row = 0
     for i in range(m):
+        if i % 64 == 0:
+            _check_build_deadline(deadline)
         matrix[row, w_slice] = y[i] * X[i]
         matrix[row, b_index] = y[i]
         matrix[row, xi_slice.start + i] = 1.0
@@ -71,6 +75,8 @@ def build_pin_fs_problem(
         row += 1
 
     for j in range(n):
+        if j % 64 == 0:
+            _check_build_deadline(deadline)
         matrix[row, w_slice.start + j] = 1.0
         matrix[row, z_slice.start + j] = -1.0
         row_upper[row] = 0.0
@@ -108,12 +114,14 @@ def build_pin_fs_problem(
             variable_upper[v_slice.start + j] = 0.0
     integrality = np.zeros(total, dtype=int)
     integrality[v_slice] = 1
+    constraint_matrix = matrix.tocsr()
+    _check_build_deadline(deadline)
 
     return PinFSProblemData(
         c=objective,
         lower_bounds=variable_lower,
         upper_bounds=variable_upper,
-        constraint_matrix=matrix.tocsr(),
+        constraint_matrix=constraint_matrix,
         constraint_lower=row_lower,
         constraint_upper=row_upper,
         integrality=integrality,
@@ -143,6 +151,7 @@ def solve_restricted_pin_fs(
     mip_start: MIPStartData | None = None,
     collect_progress: bool = True,
     allow_kernel_smaller_than_budget: bool = False,
+    deadline: float | None = None,
 ) -> RestrictedSolveResult:
     """Solve Pin-FS-SVM with binary selectors outside ``kernel`` fixed to zero."""
     X, y = validate_training_data(X, y)
@@ -175,7 +184,9 @@ def solve_restricted_pin_fs(
         lower_bound=lower_bound,
         upper_bound=upper_bound,
         allowed_features=kernel,
+        deadline=deadline,
     )
+    effective_time_limit = _effective_time_limit(time_limit, deadline)
     started = perf_counter()
     if backend == "cplex":
         raw_result = solve_docplex(
@@ -186,20 +197,21 @@ def solve_restricted_pin_fs(
             constraint_lower=problem.constraint_lower,
             constraint_upper=problem.constraint_upper,
             integrality=problem.integrality,
-            time_limit=time_limit,
+            time_limit=effective_time_limit,
             mip_gap=mip_gap,
             threads=threads,
             model_name="restricted-pin-fs-svm",
             mip_start=mip_start,
             collect_progress=collect_progress,
+            deadline=deadline,
         )
         status = raw_result.status
         progress = list(raw_result.progress)
         mip_start_status = raw_result.mip_start_status
     else:
         options: dict[str, float] = {}
-        if time_limit is not None:
-            options["time_limit"] = float(time_limit)
+        if effective_time_limit is not None:
+            options["time_limit"] = float(effective_time_limit)
         if mip_gap is not None:
             options["mip_rel_gap"] = float(mip_gap)
         raw_result = milp(
@@ -308,3 +320,20 @@ def _optional_float(result: object, name: str) -> float | None:
 def _optional_int(result: object, name: str) -> int | None:
     value = getattr(result, name, None)
     return None if value is None else int(value)
+
+
+def _effective_time_limit(
+    time_limit: float | None,
+    deadline: float | None,
+) -> float | None:
+    if deadline is None:
+        return time_limit
+    remaining = float(deadline) - perf_counter()
+    if remaining <= 1e-6:
+        raise RuntimeError("Pin-FS model construction exhausted the wall-clock budget")
+    return remaining if time_limit is None else min(float(time_limit), remaining)
+
+
+def _check_build_deadline(deadline: float | None) -> None:
+    if deadline is not None and perf_counter() >= float(deadline):
+        raise RuntimeError("Pin-FS model construction exhausted the wall-clock budget")
