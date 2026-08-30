@@ -3,18 +3,14 @@
 from __future__ import annotations
 
 import numpy as np
-from scipy.optimize import Bounds, LinearConstraint, milp
-from scipy.sparse import lil_matrix
 
 from .base import (
     BaseLinearClassifier,
-    SolverDiagnostics,
-    scipy_status,
     validate_coefficient_bounds,
     validate_positive,
     validate_training_data,
 )
-from .cplex_backend import solve_docplex, validate_backend
+from .cplex_backend import validate_backend
 
 
 class PinFSSVM(BaseLinearClassifier):
@@ -47,99 +43,41 @@ class PinFSSVM(BaseLinearClassifier):
         self.z_: np.ndarray | None = None
         self.xi_: np.ndarray | None = None
         self.v_: np.ndarray | None = None
+        self.progress_: list[object] = []
+        self.mip_start_status_: str | None = None
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "PinFSSVM":
+        # Imported lazily so ``src.search`` can also be used as a top-level public API.
+        from src.search.restricted_solver import solve_restricted_pin_fs
+
         X, y = validate_training_data(X, y)
         self._start_fit()
-        m, n = X.shape
+        _, n = X.shape
         if self.B > n:
             raise ValueError(f"B={self.B} exceeds the number of features ({n})")
-
-        # Variables: [w(n), b, z(n), xi(m), v(n)]. w and b have infinite bounds.
-        w0, b_idx = 0, n
-        z0, xi0, v0 = n + 1, 2 * n + 1, 2 * n + m + 1
-        total = 3 * n + m + 1
-        row_count = 2 * m + 4 * n + 1
-        A = lil_matrix((row_count, total), dtype=float)
-        lb = np.full(row_count, -np.inf)
-        ub = np.full(row_count, np.inf)
-        row = 0
-        for i in range(m):
-            A[row, w0 : w0 + n] = y[i] * X[i]
-            A[row, b_idx] = y[i]
-            A[row, xi0 + i] = 1.0
-            lb[row] = 1.0
-            row += 1
-            A[row, w0 : w0 + n] = y[i] * X[i]
-            A[row, b_idx] = y[i]
-            A[row, xi0 + i] = -1.0 / self.tau
-            ub[row] = 1.0
-            row += 1
-        for j in range(n):
-            A[row, w0 + j], A[row, z0 + j], ub[row] = 1.0, -1.0, 0.0
-            row += 1
-            A[row, w0 + j], A[row, z0 + j], ub[row] = -1.0, -1.0, 0.0
-            row += 1
-            A[row, w0 + j], A[row, v0 + j], ub[row] = 1.0, -self.upper_bound, 0.0
-            row += 1
-            A[row, w0 + j], A[row, v0 + j], ub[row] = -1.0, self.lower_bound, 0.0
-            row += 1
-        A[row, v0 : v0 + n] = 1.0
-        ub[row] = self.B
-
-        c = np.zeros(total)
-        c[z0 : z0 + n] = 1.0
-        c[xi0 : xi0 + m] = self.C
-        lower = np.concatenate([np.full(n + 1, -np.inf), np.zeros(n + m + n)])
-        upper = np.concatenate([np.full(n + 1 + n + m, np.inf), np.ones(n)])
-        integrality = np.zeros(total, dtype=int)
-        integrality[v0 : v0 + n] = 1
-        options: dict[str, float] = {}
-        if self.time_limit is not None:
-            options["time_limit"] = float(self.time_limit)
-        if self.requested_mip_gap is not None:
-            options["mip_rel_gap"] = float(self.requested_mip_gap)
-        if self.backend == "cplex":
-            result = solve_docplex(
-                c,
-                lower_bounds=lower,
-                upper_bounds=upper,
-                constraint_matrix=A.tocsr(),
-                constraint_lower=lb,
-                constraint_upper=ub,
-                integrality=integrality,
-                time_limit=self.time_limit,
-                mip_gap=self.requested_mip_gap,
-                threads=self.threads,
-                model_name="pin-fs-svm",
-            )
-            status = result.status
-        else:
-            result = milp(
-                c,
-                integrality=integrality,
-                bounds=Bounds(lower, upper),
-                constraints=LinearConstraint(A.tocsr(), lb, ub),
-                options=options or None,
-            )
-            status = scipy_status(result, mixed_integer=True)
-            if result.x is None or status not in {"optimal", "feasible_with_gap"}:
-                raise RuntimeError(f"Pin-FS-SVM solve failed ({status}): {result.message}")
-        self.z_ = result.x[z0 : z0 + n]
-        self.xi_ = result.x[xi0 : xi0 + m]
-        self.v_ = np.rint(result.x[v0 : v0 + n]).astype(int)
+        result = solve_restricted_pin_fs(
+            X,
+            y,
+            kernel=set(range(n)),
+            B=self.B,
+            C=self.C,
+            tau=self.tau,
+            coefficient_bounds=(self.lower_bound, self.upper_bound),
+            backend=self.backend,
+            time_limit=self.time_limit,
+            mip_gap=self.requested_mip_gap,
+            threads=self.threads,
+            collect_progress=False,
+        )
+        self.z_ = result.z
+        self.xi_ = result.xi
+        self.v_ = result.v
+        self.progress_ = result.progress
+        self.mip_start_status_ = result.mip_start_status
         self._finish_fit(
-            result.x[w0 : w0 + n],
-            result.x[b_idx],
-            SolverDiagnostics(
-                status=status,
-                objective_value=float(result.fun),
-                best_bound=_optional_float(result, "mip_dual_bound"),
-                mip_gap=_optional_float(result, "mip_gap"),
-                node_count=_optional_int(result, "mip_node_count"),
-                message=str(result.message),
-                backend=getattr(result, "backend", "scipy-highs"),
-            ),
+            result.coefficients,
+            result.intercept,
+            result.diagnostics,
         )
         return self
 
@@ -156,13 +94,3 @@ class PinFSSVM(BaseLinearClassifier):
             "upper_link": float(np.maximum(0.0, self.w_ - self.upper_bound * self.v_).max(initial=0.0)),
             "budget": float(max(0, int(self.v_.sum()) - self.B)),
         }
-
-
-def _optional_float(result: object, name: str) -> float | None:
-    value = getattr(result, name, None)
-    return None if value is None else float(value)
-
-
-def _optional_int(result: object, name: str) -> int | None:
-    value = getattr(result, name, None)
-    return None if value is None else int(value)

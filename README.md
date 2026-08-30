@@ -70,6 +70,52 @@ prints its experiment matrix and estimated fit count before training.
 Sensitivity and ablation experiments use `configs/sensitivity.yaml` and
 `configs/ablation.yaml`, respectively.
 
+## Restricted Pin-FS solver API (VeraPin-KS Milestone 1)
+
+`src.search` exposes the paper formulation as reusable solver data and supports
+feature-kernel restrictions without changing the original objective or constraints.
+Features outside the kernel are fixed with `v_j = 0`; active features are always
+derived from `abs(w_j) > 1e-3`, not from the binary selector alone.
+
+```python
+from src.search import (
+    build_pin_fs_problem,
+    result_to_mip_start,
+    solve_restricted_pin_fs,
+)
+
+restricted = solve_restricted_pin_fs(
+    X,
+    y,
+    kernel={0, 2, 5},
+    B=2,
+    C=1.0,
+    tau=0.5,
+    coefficient_bounds=(-2.0, 2.0),
+    backend="cplex",
+    time_limit=60.0,
+    mip_gap=0.01,
+    threads=1,
+    collect_progress=True,
+)
+
+full_problem = build_pin_fs_problem(
+    X,
+    y,
+    B=2,
+    C=1.0,
+    tau=0.5,
+    lower_bound=-2.0,
+    upper_bound=2.0,
+)
+warm_start = result_to_mip_start(restricted, full_problem)
+```
+
+The returned result includes the complete decision vector split into `w`, `b`,
+`z`, `xi`, and `v`, solver diagnostics, CPLEX MIP-start status, and a timestamped
+incumbent/bound/gap/node trajectory. Malformed starts raise a validation error and
+are never silently ignored. The original `PinFSSVM.fit(X, y)` API remains unchanged.
+
 ## Experimental protocol
 
 - Full experiments use 5 outer and 3 inner stratified folds.
@@ -92,6 +138,7 @@ main.py                         command-line entry point
 configs/                        pilot, full, sensitivity, ablation, and dataset specs
 src/data/                       loading, validation, partitioning, and corruption
 src/models/corrected/           corrected proposed and baseline estimators
+src/search/                     restricted Pin-FS builder, MIP starts, and progress
 src/evaluation/                 nested cross-validation and metrics
 src/experiments/                configuration, search, registry, and run orchestration
 src/statistics/                 post-hoc statistical analysis
