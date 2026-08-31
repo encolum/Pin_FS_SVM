@@ -4,7 +4,8 @@ __pycache__/
 detailed_metrics/
 .venv/
 .pytest_cache/
-Dataset/
+# External manuscript inputs; curated lowercase dataset/ is versioned.
+/Dataset/Dataset/
 /data/
 results_v2/
 artifacts_v2/

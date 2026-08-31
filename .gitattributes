@@ -1,0 +1,4 @@
+# Numeric archives and upstream metadata must retain their audited byte hashes.
+dataset/**/*.npz binary
+dataset/hill_valley.names -text -whitespace
+dataset/madelon.param -text -whitespace

@@ -24,6 +24,11 @@ def build_parser() -> argparse.ArgumentParser:
     validate = subparsers.add_parser("validate", help="audit all dataset files and optionally a config")
     validate.add_argument("--config")
 
+    benchmarks = subparsers.add_parser(
+        "validate-datasets", help="check curated dataset/ inputs without running experiments"
+    )
+    benchmarks.add_argument("--data-root")
+
     for command, default in (
         ("pilot", "configs/pilot.yaml"),
         ("sensitivity", "configs/sensitivity.yaml"),
@@ -77,6 +82,14 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command is None:
         parser.print_help()
+        return 0
+    if args.command == "validate-datasets":
+        from src.data.benchmarks import audit_benchmark_datasets
+
+        report = audit_benchmark_datasets(data_root=args.data_root)
+        print(f"Validated {len(report)} curated partitions (SHA-256, shape, labels, finite values).")
+        for row in report:
+            print(f"  {row['dataset']}/{row['partition']}: {row['samples']} x {row['features']}")
         return 0
     if args.command == "validate":
         report = audit_datasets(include_archived_variants=True)

@@ -4,9 +4,10 @@ This repository contains the refactored experimental pipeline for the Pin-FS-SVM
 manuscript. The executable implementation is centered on `main.py`, the corrected
 models in `src/models/corrected/`, and the experiment definitions in `configs/`.
 
-This is a source-only checkout. Local environments, datasets, generated results,
-plots, reports, and logs are deliberately excluded. Recreate them locally when
-needed; `.gitignore` prevents those artifacts from being committed.
+The checkout includes compact public benchmark inputs under `dataset/`, with
+provenance, checksums, and explicit partitions in [dataset/README.md](dataset/README.md).
+The original manuscript data under `Dataset/Dataset/`, local environments,
+generated results, plots, reports, and logs remain excluded from version control.
 
 The mathematical formulations follow the manuscript, while the evaluation protocol
 uses the corrected Phase 1 design: nested stratified cross-validation, clean
@@ -42,6 +43,19 @@ declared in `src/data/loaders.py`. Then validate and run the pilot:
 .venv/bin/python main.py validate --config configs/pilot.yaml
 .venv/bin/python main.py pilot --config configs/pilot.yaml
 ```
+
+The newly bundled benchmarks can be checked immediately, without a solver or
+experiment run:
+
+```bash
+.venv/bin/python main.py validate-datasets
+```
+
+Use `src.data.load_benchmark_dataset(name, partition=...)` for these inputs.
+They are deliberately separate from the original six-dataset manuscript loader;
+existing experiment configs have not been changed to silently substitute them.
+The LIBSVM Colon export is already normalized upstream and must not be represented
+as raw input for a strict train-only-preprocessing reproduction.
 
 Calling `main.py` without a command displays the available commands. Every run
 prints its experiment matrix and estimated fit count before training.
@@ -186,6 +200,8 @@ checkpoints, and cache keys are retained for audit/replay.
 ```text
 main.py                         command-line entry point
 configs/                        pilot, full, sensitivity, ablation, and dataset specs
+dataset/                        curated numeric benchmarks, metadata, and inventory
+scripts/curate_datasets.py       lossless conversion from original uploaded files
 src/data/                       loading, validation, partitioning, and corruption
 src/models/corrected/           corrected proposed and baseline estimators
 src/search/                     restricted Pin-FS builder, MIP starts, and progress
@@ -207,7 +223,8 @@ VeraPin runs and frozen-policy artifacts use `results_verapin/` and
 
 ## Verification
 
-After restoring the datasets and installing the dependencies:
+After installing the dependencies (only legacy data integration tests require
+restoring the original manuscript datasets):
 
 ```bash
 PYTHONPYCACHEPREFIX=/tmp/pinfs-pycache .venv/bin/python -m pytest -q
