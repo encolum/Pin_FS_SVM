@@ -4,7 +4,7 @@ __pycache__/
 detailed_metrics/
 .venv/
 .pytest_cache/
-# External manuscript inputs; curated lowercase dataset/ is versioned.
+# External manuscript inputs; original uploads in lowercase dataset/ are versioned.
 /Dataset/Dataset/
 /data/
 results_v2/
@@ -23,3 +23,7 @@ tmp/
 *.xlsx
 *.xls
 *.ipynb
+
+# Preserve original documentation and illustration supplied with these datasets.
+!/dataset/madelon/Dataset.pdf
+!/dataset/hill+valley/Hill_Valley_visual_examples.jpg

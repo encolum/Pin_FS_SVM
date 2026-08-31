@@ -4,7 +4,7 @@ This repository contains the refactored experimental pipeline for the Pin-FS-SVM
 manuscript. The executable implementation is centered on `main.py`, the corrected
 models in `src/models/corrected/`, and the experiment definitions in `configs/`.
 
-The checkout includes compact public benchmark inputs under `dataset/`, with
+The checkout preserves the original uploaded benchmark files under `dataset/`, with
 provenance, checksums, and explicit partitions in [dataset/README.md](dataset/README.md).
 The original manuscript data under `Dataset/Dataset/`, local environments,
 generated results, plots, reports, and logs remain excluded from version control.
@@ -44,15 +44,16 @@ declared in `src/data/loaders.py`. Then validate and run the pilot:
 .venv/bin/python main.py pilot --config configs/pilot.yaml
 ```
 
-The newly bundled benchmarks can be checked immediately, without a solver or
-experiment run:
+The uploaded benchmarks are stored unchanged: original formats, labels, dtypes,
+filenames, and train/test/validation files. No conversion or new benchmark loader
+is applied. Their byte-level integrity can be checked without loading the data or
+running an experiment:
 
 ```bash
-.venv/bin/python main.py validate-datasets
+.venv/bin/python -m pytest tests/test_dataset_originals.py -q
 ```
 
-Use `src.data.load_benchmark_dataset(name, partition=...)` for these inputs.
-They are deliberately separate from the original six-dataset manuscript loader;
+These uploads remain separate from the original six-dataset manuscript loader;
 existing experiment configs have not been changed to silently substitute them.
 The LIBSVM Colon export is already normalized upstream and must not be represented
 as raw input for a strict train-only-preprocessing reproduction.
@@ -200,8 +201,7 @@ checkpoints, and cache keys are retained for audit/replay.
 ```text
 main.py                         command-line entry point
 configs/                        pilot, full, sensitivity, ablation, and dataset specs
-dataset/                        curated numeric benchmarks, metadata, and inventory
-scripts/curate_datasets.py       lossless conversion from original uploaded files
+dataset/                        original uploaded files, documentation, and checksums
 src/data/                       loading, validation, partitioning, and corruption
 src/models/corrected/           corrected proposed and baseline estimators
 src/search/                     restricted Pin-FS builder, MIP starts, and progress

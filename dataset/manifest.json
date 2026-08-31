@@ -1,399 +1,111 @@
 {
-  "schema_version": 1,
-  "description": "Lossless numeric benchmark inputs; source originals retained outside git.",
-  "preprocessing": "None added: row/column order and all feature values preserved. Binary labels mapped explicitly; integer dtypes compacted losslessly.",
-  "datasets": [
-    {
-      "dataset": "basehock",
-      "partition": "pool",
-      "path": "basehock/pool.npz",
-      "samples": 1993,
-      "features": 4862,
-      "positive": 999,
-      "negative": 994,
-      "X_dtype": "uint8",
-      "y_dtype": "int8",
-      "bytes": 246568,
-      "sha256": "d431e127d255a8bac14387766715d817a5849064c72a86b610e51cd5de1a7164",
-      "source_files": [
-        "BASEHOCK.mat"
-      ],
-      "label_mapping": {
-        "1": -1,
-        "2": 1
-      },
-      "note": "No official split in this MAT file."
-    },
-    {
-      "dataset": "colon_libsvm",
-      "partition": "pool",
-      "path": "colon_libsvm/pool.npz",
-      "samples": 62,
-      "features": 2000,
-      "positive": 22,
-      "negative": 40,
-      "X_dtype": "float64",
-      "y_dtype": "int8",
-      "bytes": 756555,
-      "sha256": "e57621234514f232d557842bea55dc0bbe79cad53076a89bb5ff70c88da511ee",
-      "source_files": [
-        "colon-cancer.bz2"
-      ],
-      "label_mapping": {
-        "-1": -1,
-        "1": 1
-      },
-      "note": "Upstream LIBSVM data are already instance-wise then feature-wise normalized; NOT raw data for strict train-only preprocessing. Not an alias for manuscript colon.csv."
-    },
-    {
-      "dataset": "gina",
-      "partition": "pool",
-      "path": "gina/pool.npz",
-      "samples": 3468,
-      "features": 970,
-      "positive": 1705,
-      "negative": 1763,
-      "X_dtype": "uint8",
-      "y_dtype": "int8",
-      "bytes": 1445371,
-      "sha256": "de161d72c2178099835205790d547931dda995bd3cf4be8334c15dc34314ac3c",
-      "source_files": [
-        "gina.npz"
-      ],
-      "label_mapping": {
-        "-1": -1,
-        "1": 1
-      },
-      "note": "OpenML version 1 combines original training and validation samples. No original split indices were supplied; no split boundary is inferred."
-    },
-    {
-      "dataset": "hiva",
-      "partition": "pool",
-      "path": "hiva/pool.npz",
-      "samples": 4229,
-      "features": 1617,
-      "positive": 149,
-      "negative": 4080,
-      "X_dtype": "uint8",
-      "y_dtype": "int8",
-      "bytes": 499379,
-      "sha256": "5d1f4950118ca2e20b43ee9bff981cc0814f03ecffde194cb051a34ce2301d97",
-      "source_files": [
-        "hiva.npz"
-      ],
-      "label_mapping": {
-        "-1": -1,
-        "1": 1
-      },
-      "note": "OpenML version 1 combines original training and validation samples. No original split indices were supplied; no split boundary is inferred."
-    },
-    {
-      "dataset": "hill_valley_clean",
-      "partition": "train",
-      "path": "hill_valley_clean/train.npz",
-      "samples": 606,
-      "features": 100,
-      "positive": 301,
-      "negative": 305,
-      "X_dtype": "float64",
-      "y_dtype": "int8",
-      "bytes": 315177,
-      "sha256": "a268de362246c783853f9231c87359c976565ff6e203bef1faea2f7c169983a5",
-      "source_files": [
-        "hill+valley/Hill_Valley_without_noise_Training.data"
-      ],
-      "label_mapping": {
-        "0": -1,
-        "1": 1
-      },
-      "note": "Official training partition, without_noise; row order preserved."
-    },
-    {
-      "dataset": "hill_valley_clean",
-      "partition": "test",
-      "path": "hill_valley_clean/test.npz",
-      "samples": 606,
-      "features": 100,
-      "positive": 311,
-      "negative": 295,
-      "X_dtype": "float64",
-      "y_dtype": "int8",
-      "bytes": 316254,
-      "sha256": "84555f6a1044e25e92ec61a1a1ee74c6617529e13eded596dfd66885e39e44f4",
-      "source_files": [
-        "hill+valley/Hill_Valley_without_noise_Testing.data"
-      ],
-      "label_mapping": {
-        "0": -1,
-        "1": 1
-      },
-      "note": "Official testing partition, without_noise; row order preserved."
-    },
-    {
-      "dataset": "hill_valley_noisy",
-      "partition": "train",
-      "path": "hill_valley_noisy/train.npz",
-      "samples": 606,
-      "features": 100,
-      "positive": 299,
-      "negative": 307,
-      "X_dtype": "float64",
-      "y_dtype": "int8",
-      "bytes": 198796,
-      "sha256": "ce851beb95b598892dda02620642aaf8188d78c55c99c343d12f45c9c4ea92a4",
-      "source_files": [
-        "hill+valley/Hill_Valley_with_noise_Training.data"
-      ],
-      "label_mapping": {
-        "0": -1,
-        "1": 1
-      },
-      "note": "Official training partition, with_noise; row order preserved."
-    },
-    {
-      "dataset": "hill_valley_noisy",
-      "partition": "test",
-      "path": "hill_valley_noisy/test.npz",
-      "samples": 606,
-      "features": 100,
-      "positive": 307,
-      "negative": 299,
-      "X_dtype": "float64",
-      "y_dtype": "int8",
-      "bytes": 199839,
-      "sha256": "1c6d86292134f5357f6a8ae3eb7187347837c192c7de3d47f70423fb2d983b56",
-      "source_files": [
-        "hill+valley/Hill_Valley_with_noise_Testing.data"
-      ],
-      "label_mapping": {
-        "0": -1,
-        "1": 1
-      },
-      "note": "Official testing partition, with_noise; row order preserved."
-    },
-    {
-      "dataset": "madelon",
-      "partition": "train",
-      "path": "madelon/train.npz",
-      "samples": 2000,
-      "features": 500,
-      "positive": 1000,
-      "negative": 1000,
-      "X_dtype": "int16",
-      "y_dtype": "int8",
-      "bytes": 1136968,
-      "sha256": "99d199d5991b27f0f17573b86729e47eaf6585bde87ea30cc4ab93592325ba0f",
-      "source_files": [
-        "madelon/MADELON/madelon_train.data",
-        "madelon/MADELON/madelon_train.labels"
-      ],
-      "label_mapping": {
-        "-1": -1,
-        "1": 1
-      },
-      "note": "Official train partition. Validation is not renamed as test."
-    },
-    {
-      "dataset": "madelon",
-      "partition": "validation",
-      "path": "madelon/validation.npz",
-      "samples": 600,
-      "features": 500,
-      "positive": 300,
-      "negative": 300,
-      "X_dtype": "int16",
-      "y_dtype": "int8",
-      "bytes": 341831,
-      "sha256": "f2aeb488a5dcf1b8e6bf3d80a6a94091e8969167468814289d086048e80b0e27",
-      "source_files": [
-        "madelon/MADELON/madelon_valid.data",
-        "madelon/madelon_valid.labels"
-      ],
-      "label_mapping": {
-        "-1": -1,
-        "1": 1
-      },
-      "note": "Official validation partition. Validation is not renamed as test."
-    }
-  ],
-  "metadata": [
-    {
-      "path": "hill_valley.names",
-      "sha256": "3d09bb2221404d3282a22023e0d96edf5bdfa67911de4272b448a3ca6cf7ae06"
-    },
-    {
-      "path": "madelon.param",
-      "sha256": "c65bcf86fb79b284c2e628c0a8cf47b89f49aca14ca3a85e68f9f8a2f031f1b1"
-    }
-  ],
-  "original_inventory": [
+  "schema_version": 2,
+  "representation": "original_uploads",
+  "transformation": "none",
+  "description": "Uploaded files preserved byte-for-byte, with original filenames and internal directory structure. No format, dtype, label, feature or split changes.",
+  "files": [
     {
       "path": "BASEHOCK.mat",
       "bytes": 279059,
-      "sha256": "e0452e0f3c0fefdc5cb6352165e4ba4a25c3a2a7b5a5b4d44e103742d6317aa0",
-      "curated_paths": [
-        "basehock/pool.npz"
-      ],
-      "decision": "represented losslessly in curated files"
+      "sha256": "e0452e0f3c0fefdc5cb6352165e4ba4a25c3a2a7b5a5b4d44e103742d6317aa0"
     },
     {
       "path": "colon-cancer.bz2",
       "bytes": 609480,
-      "sha256": "724d7291efb9a833b8407442a27f70f64beeb86c107d7b3ce98e8c48fe878867",
-      "curated_paths": [
-        "colon_libsvm/pool.npz"
-      ],
-      "decision": "represented losslessly in curated files"
+      "sha256": "724d7291efb9a833b8407442a27f70f64beeb86c107d7b3ce98e8c48fe878867"
     },
     {
       "path": "download.py",
       "bytes": 272,
-      "sha256": "6d4678bf65a07d803c496f7d9805109bc72dab6aaf4ce81363064b473d77f2be",
-      "curated_paths": [],
-      "decision": "superseded by this curation script and documented OpenML IDs"
+      "sha256": "6d4678bf65a07d803c496f7d9805109bc72dab6aaf4ce81363064b473d77f2be"
     },
     {
       "path": "gina.npz",
       "bytes": 26919267,
-      "sha256": "ef4147ba955b5348966bcb92f6418491f3c5acea494c2ce41d3bb5afa6ced255",
-      "curated_paths": [
-        "gina/pool.npz"
-      ],
-      "decision": "represented losslessly in curated files"
+      "sha256": "ef4147ba955b5348966bcb92f6418491f3c5acea494c2ce41d3bb5afa6ced255"
     },
     {
       "path": "hill+valley/Hill-Valley.names",
       "bytes": 2226,
-      "sha256": "3d09bb2221404d3282a22023e0d96edf5bdfa67911de4272b448a3ca6cf7ae06",
-      "curated_paths": [
-        "hill_valley.names"
-      ],
-      "decision": "represented losslessly in curated files"
+      "sha256": "3d09bb2221404d3282a22023e0d96edf5bdfa67911de4272b448a3ca6cf7ae06"
     },
     {
       "path": "hill+valley/Hill_Valley_sample_arff.text",
       "bytes": 2485,
-      "sha256": "437856dd49a0f1bff0295d9afa48e5b460f31d93e413270b5154133b471ffef2",
-      "curated_paths": [],
-      "decision": "format example, not a separate benchmark partition"
+      "sha256": "437856dd49a0f1bff0295d9afa48e5b460f31d93e413270b5154133b471ffef2"
     },
     {
       "path": "hill+valley/Hill_Valley_visual_examples.jpg",
       "bytes": 51811,
-      "sha256": "fc7874636eb464169f007693c1d5c0fde2ca07da8beee633490419de3788a7df",
-      "curated_paths": [],
-      "decision": "illustration, not model input"
+      "sha256": "fc7874636eb464169f007693c1d5c0fde2ca07da8beee633490419de3788a7df"
     },
     {
       "path": "hill+valley/Hill_Valley_with_noise_Testing.data",
       "bytes": 420871,
-      "sha256": "d7276840d9e4327f362269baca8af5e68ae1336052e57c95bde7b150669e4871",
-      "curated_paths": [
-        "hill_valley_noisy/test.npz"
-      ],
-      "decision": "represented losslessly in curated files"
+      "sha256": "d7276840d9e4327f362269baca8af5e68ae1336052e57c95bde7b150669e4871"
     },
     {
       "path": "hill+valley/Hill_Valley_with_noise_Training.data",
       "bytes": 417361,
-      "sha256": "aef62398c3a215452bcf4ce5c6a87207a3dc8e79631ef87a6eda6fe3896bc966",
-      "curated_paths": [
-        "hill_valley_noisy/train.npz"
-      ],
-      "decision": "represented losslessly in curated files"
+      "sha256": "aef62398c3a215452bcf4ce5c6a87207a3dc8e79631ef87a6eda6fe3896bc966"
     },
     {
       "path": "hill+valley/Hill_Valley_without_noise_Testing.data",
       "bytes": 722774,
-      "sha256": "2d36201a54f6e8de6bd5dad99391c1a9754b95a3364c3461567795302882902f",
-      "curated_paths": [
-        "hill_valley_clean/test.npz"
-      ],
-      "decision": "represented losslessly in curated files"
+      "sha256": "2d36201a54f6e8de6bd5dad99391c1a9754b95a3364c3461567795302882902f"
     },
     {
       "path": "hill+valley/Hill_Valley_without_noise_Training.data",
       "bytes": 722695,
-      "sha256": "af232ff5258abeb5b1c61974648fd00bc0d37a545de33a2c3493692fc20330d5",
-      "curated_paths": [
-        "hill_valley_clean/train.npz"
-      ],
-      "decision": "represented losslessly in curated files"
+      "sha256": "af232ff5258abeb5b1c61974648fd00bc0d37a545de33a2c3493692fc20330d5"
     },
     {
       "path": "hiva.npz",
       "bytes": 54715455,
-      "sha256": "f4d9b8a0e5797bbc54e66c713d0d8bb3d6a6cfe69b787c1a41f59cccbeb9a49c",
-      "curated_paths": [
-        "hiva/pool.npz"
-      ],
-      "decision": "represented losslessly in curated files"
-    },
-    {
-      "path": "madelon/.DS_Store",
-      "bytes": 8196,
-      "sha256": "2a9f1f5dadcd0ef06525e482efeb5d4ba1bd8d1e55b7b744d5dd27c1a1d96a8b",
-      "curated_paths": [],
-      "decision": "operating-system metadata"
+      "sha256": "f4d9b8a0e5797bbc54e66c713d0d8bb3d6a6cfe69b787c1a41f59cccbeb9a49c"
     },
     {
       "path": "madelon/Dataset.pdf",
       "bytes": 453565,
-      "sha256": "9a1752b81c45e1d2924d341269f0856a6530b74742c572353180708dacfa3d0b",
-      "curated_paths": [],
-      "decision": "reference report; linked in README, original retained in backup"
+      "sha256": "9a1752b81c45e1d2924d341269f0856a6530b74742c572353180708dacfa3d0b"
     },
     {
       "path": "madelon/MADELON/madelon.param",
       "bytes": 266,
-      "sha256": "c65bcf86fb79b284c2e628c0a8cf47b89f49aca14ca3a85e68f9f8a2f031f1b1",
-      "curated_paths": [
-        "madelon.param"
-      ],
-      "decision": "represented losslessly in curated files"
+      "sha256": "c65bcf86fb79b284c2e628c0a8cf47b89f49aca14ca3a85e68f9f8a2f031f1b1"
     },
     {
       "path": "madelon/MADELON/madelon_test.data",
       "bytes": 3601795,
-      "sha256": "93efc31148c850645520fbd8eae4422ac5e4861dc6454d2eceae7e93c1e2badb",
-      "curated_paths": [],
-      "decision": "unlabeled test matrix; not needed for supervised runs"
+      "sha256": "93efc31148c850645520fbd8eae4422ac5e4861dc6454d2eceae7e93c1e2badb"
     },
     {
       "path": "madelon/MADELON/madelon_train.data",
       "bytes": 4001995,
-      "sha256": "0b6e37711efdc7ab74250c51e7d6966bffd9f8f2b0e9971e882c3a7a380c2314",
-      "curated_paths": [
-        "madelon/train.npz"
-      ],
-      "decision": "represented losslessly in curated files"
+      "sha256": "0b6e37711efdc7ab74250c51e7d6966bffd9f8f2b0e9971e882c3a7a380c2314"
     },
     {
       "path": "madelon/MADELON/madelon_train.labels",
       "bytes": 5000,
-      "sha256": "10bffcc3b017467cb810d326b931951adcbde2b4870faf981da2991993b48689",
-      "curated_paths": [
-        "madelon/train.npz"
-      ],
-      "decision": "represented losslessly in curated files"
+      "sha256": "10bffcc3b017467cb810d326b931951adcbde2b4870faf981da2991993b48689"
     },
     {
       "path": "madelon/MADELON/madelon_valid.data",
       "bytes": 1200599,
-      "sha256": "cb9a46475147de1a58d9f15ef4c318e5b85de344e0f9ab92626fa446aa815dc9",
-      "curated_paths": [
-        "madelon/validation.npz"
-      ],
-      "decision": "represented losslessly in curated files"
+      "sha256": "cb9a46475147de1a58d9f15ef4c318e5b85de344e0f9ab92626fa446aa815dc9"
     },
     {
       "path": "madelon/madelon_valid.labels",
       "bytes": 1500,
-      "sha256": "fbac32fa87fac41ab731994a1c824e7b25396069bff6df242c01fe240fcb34dc",
-      "curated_paths": [
-        "madelon/validation.npz"
-      ],
-      "decision": "represented losslessly in curated files"
+      "sha256": "fbac32fa87fac41ab731994a1c824e7b25396069bff6df242c01fe240fcb34dc"
+    }
+  ],
+  "excluded_from_git": [
+    {
+      "path": "madelon/.DS_Store",
+      "bytes": 8196,
+      "sha256": "2a9f1f5dadcd0ef06525e482efeb5d4ba1bd8d1e55b7b744d5dd27c1a1d96a8b",
+      "reason": "Operating-system metadata; retained in the local original backup."
     }
   ]
 }
