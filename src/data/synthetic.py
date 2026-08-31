@@ -39,9 +39,12 @@ class SyntheticInstanceData:
     redundant_indices: list[int]
     redundant_sources: dict[int, int]
     feature_budget: int
+    generation_mode: str = "legacy_embedded_corruption"
 
     def metadata(self) -> dict[str, Any]:
         return {
+            "generation_mode": self.generation_mode,
+            "research_split": self.parameters.split,
             "parameters": asdict(self.parameters),
             "data_hash": self.data_hash,
             "informative_indices": self.informative_indices,
@@ -74,7 +77,7 @@ def generate_synthetic_instance(
     seed: int,
     split: str,
 ) -> SyntheticInstanceData:
-    """Generate one reproducible binary instance with auditable feature structure."""
+    """Legacy generator including pre-split corruption; not for final scientific use."""
     n_samples = _integer_at_least(n_samples, "n_samples", 4)
     n_features = _integer_at_least(n_features, "n_features", 2)
     informative_ratio = _closed_rate(informative_ratio, "informative_ratio")
@@ -192,6 +195,19 @@ def generate_synthetic_instance(
     )
 
 
+def generate_clean_synthetic_instance(*, n_samples, n_features, informative_ratio,
+        redundant_ratio, correlation_strength, positive_class_fraction,
+        feature_budget_ratio, seed, research_split):
+    """Generate a clean base only; experimental corruption belongs after splitting."""
+    result = generate_synthetic_instance(n_samples=n_samples, n_features=n_features,
+        informative_ratio=informative_ratio, redundant_ratio=redundant_ratio,
+        correlation_strength=correlation_strength, positive_class_fraction=positive_class_fraction,
+        feature_budget_ratio=feature_budget_ratio, seed=seed, split=research_split,
+        label_noise_rate=0., outlier_sample_rate=0., outlier_feature_rate=0., outlier_scale=0.)
+    result.generation_mode = "clean_base"
+    return result
+
+
 def save_synthetic_instance(
     instance: SyntheticInstanceData,
     directory: str | Path,
@@ -232,6 +248,7 @@ def load_synthetic_instance(
             int(key): int(value) for key, value in metadata["redundant_sources"].items()
         },
         feature_budget=int(metadata["feature_budget"]),
+        generation_mode=metadata.get("generation_mode", "legacy_embedded_corruption"),
     )
 
 

@@ -8,6 +8,7 @@ from time import perf_counter
 from typing import Any
 
 import numpy as np
+from src.models.corrected.base import validate_training_data
 
 from .mip_start import result_to_mip_start
 from .policies.base import KernelPolicy
@@ -45,8 +46,8 @@ def run_kernel_search(
     lp_cache: LPRelaxationCache | None = None,
 ) -> KernelSearchResult:
     """Run Static KS, ADKS, or VeraPin through one shared search loop."""
-    X = np.asarray(X, dtype=float)
-    y = np.asarray(y, dtype=int)
+    route_started = perf_counter()
+    X, y = validate_training_data(X, y)
     total_time_limit = _positive(total_time_limit, "total_time_limit")
     subproblem_time_limit = _positive(subproblem_time_limit, "subproblem_time_limit")
     if int(max_iterations) < 1:
@@ -56,7 +57,6 @@ def run_kernel_search(
     if float(acceptance_epsilon) < 0:
         raise ValueError("acceptance_epsilon must be non-negative")
 
-    route_started = perf_counter()
     deadline = route_started + total_time_limit
     reserve = total_time_limit * float(final_refinement_fraction) if final_full_refinement else 0.0
     search_deadline = deadline - reserve
@@ -170,15 +170,13 @@ def run_kernel_search(
     for iteration in range(1, int(max_iterations)):
         if perf_counter() >= search_deadline:
             break
-        states, dynamic_normalization = build_feature_states(
-            static,
-            kernel=kernel,
-            current_result=current,
-            selection_counts=selection_counts,
-            observations=observations,
-            inactive_iterations=inactive_iterations,
-            kernel_age=kernel_age,
-        )
+        try:
+            states, dynamic_normalization = build_feature_states(
+                static, kernel=kernel, current_result=current,
+                selection_counts=selection_counts, observations=observations,
+                inactive_iterations=inactive_iterations, kernel_age=kernel_age)
+        except TimeBudgetExceeded:
+            break  # retain the feasible incumbent and reserve final refinement time
         normalization_history.append(dynamic_normalization)
         search_state = _search_state(
             iteration=iteration - 1,
@@ -387,6 +385,7 @@ def run_kernel_search(
         "mip_start_overhead": mip_start_overhead,
         "total_node_count": sum(int(record.get("node_count") or 0) for record in history),
         "signal_normalization": static.normalization.to_dict(),
+        "skipped_signals": static.skipped_signals,
         "dynamic_normalization": normalization_history,
         "route_progress": [asdict(record) for record in route_progress],
         "final_full_refinement": final_refinement_performed,

@@ -71,10 +71,10 @@ existing experiment configs have not been changed to silently substitute them.
 The LIBSVM Colon export is already normalized upstream and must not be represented
 as raw input for a strict train-only-preprocessing reproduction.
 
-### Solver-facing benchmark validation (Milestones 0–2)
+### Solver-facing benchmark validation
 
 The separate [benchmark registry](configs/benchmark_registry.yaml) declares exact
-label mappings, partition policies, storage and **future** preprocessing policies.
+label mappings, partition policies, storage and preprocessing policies.
 Validate its in-memory views without training or changing original files:
 
 ```bash
@@ -104,11 +104,63 @@ raw manifest before mapping labels to int64 `{-1, +1}`. BASEHOCK is stored dense
 in its original MAT file and is explicitly converted to CSR in memory; Colon
 stays CSR. Neither sparse input is implicitly densified.
 
-These views are **unscaled**: preprocessing is declared, not applied. They are not
-yet connected to VeraPin's experiment dispatch, and this milestone does not make
-the six-dataset experiment suite ready to run. See the
-[integration report](docs/benchmark_integration_m0_m2.md) for measured results,
-scope and remaining decisions.
+The adapter's views are **unscaled**. VeraPin now loads them with `kind: benchmark`
+and applies the declared preprocessing inside training partitions. The historical
+[Milestones 0–2 report](docs/benchmark_integration_m0_m2.md) records the initial layer;
+the [full integration report](docs/benchmark_integration_full.md) covers the completed
+code, tests, pilot evidence and remaining scientific approvals.
+
+### Benchmark pilots and final evaluation
+
+Complete **provisional software-QA** profiles are provided; their parameters are
+explicit examples, not author-approved scientific choices. Configuration checks
+do not start a solver or create a run:
+
+```bash
+.venv/bin/python main.py hardness --config configs/hardness_real_pilot.yaml --validate-only
+.venv/bin/python main.py hardness --config configs/hardness_synthetic_pilot.yaml --validate-only
+.venv/bin/python main.py adks --config configs/adks_real_pilot.yaml --validate-only
+```
+
+After reviewing the provisional settings and installing a CPLEX license that
+supports the full model, run real pilots **one at a time**:
+
+```bash
+.venv/bin/python main.py hardness --config configs/hardness_real_pilot.yaml --instance hill-valley-clean
+.venv/bin/python main.py hardness --config configs/hardness_real_pilot.yaml --instance madelon-clean
+```
+
+Continue, separately, with `gina-clean`, `hiva-clean`, `colon-clean`, then
+`basehock-clean`. The six-instance config refuses execution without narrowing the
+selection. It never subsamples or trims features to bypass a license limit.
+
+The ADKS profile requires hardness reports documenting at least two nontrivial
+instances. Evolution additionally requires a frozen ADKS baseline, fixed budgets,
+defined research groups and profiled signals. These are explicit execution gates,
+not settings that validation approves automatically.
+
+Final benchmark evaluation uses `configs/verapin_final.yaml`: nested stratified
+5 outer × 3 inner folds, full/reduced Pin-FS tuning by inner Balanced Accuracy,
+then frozen `B/C/tau` shared by Cold CPLEX, ADKS and a frozen VeraPin policy. No
+ADKS/VeraPin runs occur inside tuning and no LLM is used during final evaluation.
+Unresolved scientific values and the frozen policy artifact remain required.
+
+For generated data, use `generation: clean` with `research_split` separately from
+`source_partition_policy` and `outer_fold`. Optional `mixed`, `feature_outlier`,
+`combined` (mixed + feature outliers), or `high_margin_label_attack` profiles require
+explicit parameters under `corruption.profiles` and explicit `corruption.seeds`.
+Only preprocessed training data is corrupted. Each seed is a separate comparison
+instance with identical matrices/masks across routes; clean test hashes are saved.
+Sparse feature corruption also requires an explicit `max_modified_cells` cap.
+
+CSR remains sparse through Pin-FS construction, prediction, hashing and safe
+preprocessing (`standard_sparse`, `max_abs`, `none`, or upstream-normalized
+passthrough). Dense `standard` scaling on CSR requires both `allow_densify: true`
+and `max_dense_bytes`, checked again for every transformed partition. Overrides
+belong in `preprocessing: {policy: ..., ...}` and are saved in manifests.
+Continuous sparse MI is skipped unless bounded densification is explicitly
+enabled; discrete MI must be explicitly declared. Correlation is chunked in both
+dimensions. Pilot configs disable MI/correlation and use Fisher/LP signals.
 
 Calling `main.py` without a command displays the available commands. Every run
 prints its experiment matrix and estimated fit count before training.

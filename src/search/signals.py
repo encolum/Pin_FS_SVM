@@ -9,6 +9,9 @@ from time import perf_counter
 from typing import Any
 
 import numpy as np
+from scipy import sparse
+from sklearn.utils.sparsefuncs import mean_variance_axis
+from src.utils.matrices import guarded_dense, update_array_hash
 from scipy.optimize import Bounds, LinearConstraint, milp
 from sklearn.feature_selection import mutual_info_classif
 
@@ -66,6 +69,10 @@ class StaticSignalData:
     normalization: NormalizationParameters
     lp_relaxation: LPRelaxationResult | None
     overhead_seconds: dict[str, float]
+    skipped_signals: dict[str, str] = field(default_factory=dict)
+    use_correlation: bool = True
+    correlation_chunk_size: int = 256
+    deadline: float | None = None
 
 
 @dataclass
@@ -184,6 +191,12 @@ def compute_static_signals(
     use_l1: bool = False,
     use_pin: bool = False,
     use_lp: bool = True,
+    use_fisher: bool = True,
+    use_mutual_information: bool = True,
+    use_correlation: bool = True,
+    mutual_information_discrete: bool = False,
+    allow_densify: bool = False,
+    max_dense_bytes: int | None = None,
     baseline_backend: str = "scipy",
     lp_backend: str = "scipy",
     lp_time_limit: float | None = None,
@@ -200,35 +213,58 @@ def compute_static_signals(
     baseline_backend = validate_backend(baseline_backend)
 
     stage = perf_counter()
+    _check_deadline(deadline)
+    if type(correlation_chunk_size) is not int or correlation_chunk_size < 1:
+        raise ValueError("correlation_chunk_size must be a positive integer")
+    skipped = {}
     standardized = _standardize(X)
-    fisher = _fisher_scores(X, y)
-    mi = mutual_info_classif(X, y, random_state=int(seed))
+    fisher = _fisher_scores(X, y) if use_fisher else np.zeros(X.shape[1])
+    if not use_fisher:
+        skipped["fisher"] = "disabled by config"
+    mi = np.zeros(X.shape[1])
+    if not use_mutual_information:
+        skipped["mutual_information"] = "disabled by config"
+    elif sparse.issparse(X) and not mutual_information_discrete and not allow_densify:
+        skipped["mutual_information"] = "continuous sparse MI requires explicit bounded densification"
+    else:
+        mi_X = (guarded_dense(X, allow_densify=allow_densify, max_dense_bytes=max_dense_bytes)
+                if sparse.issparse(X) and not mutual_information_discrete else X)
+        for column in range(X.shape[1]):
+            _check_deadline(deadline)
+            mi[column] = mutual_info_classif(mi_X[:, column:column + 1], y,
+                discrete_features=mutual_information_discrete, random_state=int(seed))[0]
     overhead["univariate"] = perf_counter() - stage
     _check_deadline(deadline)
 
     stage = perf_counter()
-    mean_corr, max_corr = _correlation_summaries(
-        standardized,
-        chunk_size=correlation_chunk_size,
-        deadline=deadline,
-    )
+    mean_corr, max_corr = (np.zeros(X.shape[1]), np.zeros(X.shape[1]))
+    if use_correlation:
+        mean_corr, max_corr = _correlation_summaries(
+            standardized, chunk_size=correlation_chunk_size, deadline=deadline)
+    else:
+        skipped["correlation"] = "disabled by config (includes dynamic support redundancy)"
     overhead["correlation"] = perf_counter() - stage
 
     l1_coefficients = np.zeros(X.shape[1], dtype=float)
     if use_l1:
         _check_deadline(deadline)
         stage = perf_counter()
+        _baseline_memory_guard(X, "l1", max_dense_bytes)
+        baseline_X = guarded_dense(X, allow_densify=allow_densify, max_dense_bytes=max_dense_bytes)
         l1 = L1SVM(
             C=C,
             time_limit=_remaining(deadline),
             backend=baseline_backend,
             threads=threads,
-        ).fit(X, y)
+        ).fit(baseline_X, y)
         l1_coefficients = np.abs(np.asarray(l1.w_, dtype=float))
         overhead["l1"] = perf_counter() - stage
         _check_deadline(deadline)
 
     pin_coefficients = np.zeros(X.shape[1], dtype=float)
+    if use_pin and baseline_backend == "scipy" and deadline is not None:
+        skipped["pin"] = "SciPy SLSQP has no enforceable wall-clock limit; use CPLEX for a budgeted Pin signal"
+        use_pin = False
     if use_pin:
         _check_deadline(deadline)
         if deadline is not None and baseline_backend != "cplex":
@@ -236,13 +272,15 @@ def compute_static_signals(
                 "use_pin under a strict wall-clock budget requires baseline_backend='cplex'"
             )
         stage = perf_counter()
+        _baseline_memory_guard(X, "pin", max_dense_bytes)
+        baseline_X = guarded_dense(X, allow_densify=allow_densify, max_dense_bytes=max_dense_bytes)
         pin = PinSVM(
             C=C,
             tau=tau,
             time_limit=_remaining(deadline),
             backend=baseline_backend,
             threads=threads,
-        ).fit(X, y)
+        ).fit(baseline_X, y)
         pin_coefficients = np.abs(np.asarray(pin.w_, dtype=float))
         overhead["pin"] = perf_counter() - stage
         _check_deadline(deadline)
@@ -294,6 +332,10 @@ def compute_static_signals(
         normalization=normalizer,
         lp_relaxation=lp_result,
         overhead_seconds=overhead,
+        skipped_signals=skipped,
+        use_correlation=use_correlation,
+        correlation_chunk_size=correlation_chunk_size,
+        deadline=deadline,
     )
 
 
@@ -322,7 +364,10 @@ def build_feature_states(
     )
     slack_association = _absolute_association(static.standardized_X, slack)
     support = np.flatnonzero(selected)
-    redundancy = _support_redundancy(static.standardized_X, support)
+    _check_deadline(static.deadline)
+    redundancy = (_support_redundancy(static.standardized_X, support,
+                    chunk_size=static.correlation_chunk_size, deadline=static.deadline)
+                  if static.use_correlation else np.zeros(n))
     dynamic = NormalizationParameters()
     coefficient_signal = dynamic.fit_transform("abs_coefficient", coefficients)
     slack_signal = dynamic.fit_transform("slack_association", slack_association)
@@ -354,18 +399,41 @@ def build_feature_states(
 
 
 def _fisher_scores(X: np.ndarray, y: np.ndarray) -> np.ndarray:
-    positive = X[y == 1]
-    negative = X[y == -1]
-    numerator = np.square(positive.mean(axis=0) - negative.mean(axis=0))
-    denominator = positive.var(axis=0) + negative.var(axis=0) + 1e-12
+    positive_mean, positive_var = _moments(X[y == 1])
+    negative_mean, negative_var = _moments(X[y == -1])
+    numerator = np.square(positive_mean - negative_mean)
+    denominator = positive_var + negative_var + 1e-12
     return numerator / denominator
 
 
+def _moments(X):
+    if sparse.issparse(X):
+        return mean_variance_axis(X, axis=0)
+    return X.mean(axis=0), X.var(axis=0)
+
+
+def _baseline_memory_guard(X, kind, maximum):
+    if sparse.issparse(X):
+        m, n = X.shape
+        required = ((m + 2 * n) * (m + 2 * n + 1) if kind == "l1" else 2 * m * (n + 1 + m)) * 8
+        if type(maximum) is not int or required > maximum:
+            raise ValueError(f"optional dense {kind} signal model exceeds max_dense_bytes ({required} bytes)")
+
+
 def _standardize(X: np.ndarray) -> np.ndarray:
-    centered = X - X.mean(axis=0)
-    scale = X.std(axis=0)
+    mean, variance = _moments(X)
+    scale = np.sqrt(np.maximum(variance, 0))
     scale[scale <= 1e-15] = 1.0
-    return centered / scale
+    # Sparse centering is represented algebraically in covariance/association.
+    return X.multiply(1 / scale).tocsr() if sparse.issparse(X) else (X - mean) / scale
+
+
+def _correlation_block(X, left, right, means):
+    block = X[:, left].T @ X[:, right]
+    if sparse.issparse(block):
+        block = block.toarray()  # bounded chunk x chunk, never the feature matrix
+    return np.clip(np.abs(np.asarray(block) / X.shape[0]
+                         - np.outer(means[left], means[right])), 0, 1)
 
 
 def _correlation_summaries(
@@ -377,18 +445,21 @@ def _correlation_summaries(
     if int(chunk_size) < 1:
         raise ValueError("correlation_chunk_size must be positive")
     samples, features = standardized_X.shape
-    denominator = max(1, samples)
+    means, _ = _moments(standardized_X)
+    chunk_size = min(int(chunk_size), max(1, features // 2))
     mean_values = np.zeros(features, dtype=float)
     max_values = np.zeros(features, dtype=float)
     for start in range(0, features, int(chunk_size)):
         _check_deadline(deadline)
         stop = min(features, start + int(chunk_size))
-        correlation = np.abs(standardized_X[:, start:stop].T @ standardized_X / denominator)
-        for local, index in enumerate(range(start, stop)):
-            correlation[local, index] = 0.0
-        divisor = max(1, features - 1)
-        mean_values[start:stop] = correlation.sum(axis=1) / divisor
-        max_values[start:stop] = correlation.max(axis=1, initial=0.0)
+        for other in range(0, features, chunk_size):
+            _check_deadline(deadline)
+            end = min(features, other + chunk_size)
+            correlation = _correlation_block(standardized_X, slice(start, stop), slice(other, end), means)
+            if start == other:
+                np.fill_diagonal(correlation, 0)
+            mean_values[start:stop] += correlation.sum(axis=1) / max(1, features - 1)
+            max_values[start:stop] = np.maximum(max_values[start:stop], correlation.max(axis=1))
     return np.clip(mean_values, 0.0, 1.0), np.clip(max_values, 0.0, 1.0)
 
 
@@ -397,17 +468,25 @@ def _absolute_association(standardized_X: np.ndarray, values: np.ndarray) -> np.
     norm = float(np.linalg.norm(centered))
     if norm <= 1e-15:
         return np.zeros(standardized_X.shape[1], dtype=float)
-    feature_norms = np.linalg.norm(standardized_X, axis=0)
+    _, variance = _moments(standardized_X)
+    feature_norms = np.sqrt(np.maximum(variance, 0) * standardized_X.shape[0])
     denominator = np.maximum(feature_norms * norm, 1e-15)
     return np.clip(np.abs(standardized_X.T @ centered) / denominator, 0.0, 1.0)
 
 
-def _support_redundancy(standardized_X: np.ndarray, support: np.ndarray) -> np.ndarray:
+def _support_redundancy(standardized_X: np.ndarray, support: np.ndarray, *, chunk_size=256, deadline=None) -> np.ndarray:
     if support.size == 0:
         return np.zeros(standardized_X.shape[1], dtype=float)
-    denominator = max(1, standardized_X.shape[0])
-    values = np.abs(standardized_X.T @ standardized_X[:, support] / denominator)
-    result = values.max(axis=1)
+    features = standardized_X.shape[1]
+    chunk_size = min(chunk_size, max(1, features // 2))
+    means, _ = _moments(standardized_X)
+    result = np.zeros(features)
+    for start in range(0, features, chunk_size):
+        stop = min(features, start + chunk_size)
+        for other in range(0, len(support), chunk_size):
+            _check_deadline(deadline)
+            values = _correlation_block(standardized_X, slice(start, stop), support[other:other + chunk_size], means)
+            result[start:stop] = np.maximum(result[start:stop], values.max(axis=1))
     result[support] = 0.0
     return np.clip(result, 0.0, 1.0)
 
@@ -418,8 +497,8 @@ def _relaxation_key(
     **parameters: Any,
 ) -> str:
     digest = sha256()
-    digest.update(np.ascontiguousarray(X).view(np.uint8))
-    digest.update(np.ascontiguousarray(y).view(np.uint8))
+    update_array_hash(digest, X)
+    update_array_hash(digest, y)
     stable_parameters = dict(parameters)
     allowed = stable_parameters.get("allowed_features")
     if allowed is not None:

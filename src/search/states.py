@@ -60,6 +60,7 @@ class RestrictedSolveResult:
     solve_time: float
     kernel: set[int]
     mip_start_status: str | None
+    model_build_time: float = 0.0
 
 
 @dataclass(frozen=True)

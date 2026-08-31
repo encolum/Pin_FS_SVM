@@ -1,26 +1,146 @@
 {
-  "description": "Held-out Cold CPLEX vs ADKS vs frozen VeraPin evaluation; no LLM calls.",
+  "description": "Author-gated nested 5x3 evaluation of six held-out real benchmarks; no LLM calls and no automatic experiment.",
   "instances": [
-    {"id": "heldout-1000", "split": "test", "n_samples": null, "n_features": 1000, "informative_ratio": null, "redundant_ratio": null, "correlation_strength": null, "positive_class_fraction": null, "label_noise_rate": null, "outlier_sample_rate": null, "outlier_feature_rate": null, "outlier_scale": null, "feature_budget_ratio": null, "seed": null},
-    {"id": "heldout-2000", "split": "test", "n_samples": null, "n_features": 2000, "informative_ratio": null, "redundant_ratio": null, "correlation_strength": null, "positive_class_fraction": null, "label_noise_rate": null, "outlier_sample_rate": null, "outlier_feature_rate": null, "outlier_scale": null, "feature_budget_ratio": null, "seed": null},
-    {"id": "heldout-5000", "split": "test", "n_samples": null, "n_features": 5000, "informative_ratio": null, "redundant_ratio": null, "correlation_strength": null, "positive_class_fraction": null, "label_noise_rate": null, "outlier_sample_rate": null, "outlier_feature_rate": null, "outlier_scale": null, "feature_budget_ratio": null, "seed": null}
+    {
+      "id": "hill-valley-clean",
+      "kind": "benchmark",
+      "dataset": "hill_valley",
+      "source_partition_policy": "merge_labeled",
+      "research_split": "test",
+      "condition": "clean",
+      "feature_budget": 10
+    },
+    {
+      "id": "madelon-clean",
+      "kind": "benchmark",
+      "dataset": "madelon",
+      "source_partition_policy": "merge_labeled",
+      "research_split": "test",
+      "condition": "clean",
+      "feature_budget": 20
+    },
+    {
+      "id": "gina-clean",
+      "kind": "benchmark",
+      "dataset": "gina",
+      "source_partition_policy": "pool",
+      "research_split": "test",
+      "condition": "clean",
+      "feature_budget": 20
+    },
+    {
+      "id": "hiva-clean",
+      "kind": "benchmark",
+      "dataset": "hiva",
+      "source_partition_policy": "pool",
+      "research_split": "test",
+      "condition": "clean",
+      "feature_budget": 20
+    },
+    {
+      "id": "colon-clean",
+      "kind": "benchmark",
+      "dataset": "colon",
+      "source_partition_policy": "pool",
+      "research_split": "test",
+      "condition": "clean",
+      "feature_budget": 20
+    },
+    {
+      "id": "basehock-clean",
+      "kind": "benchmark",
+      "dataset": "basehock",
+      "source_partition_policy": "pool",
+      "research_split": "test",
+      "condition": "clean",
+      "feature_budget": 20
+    }
   ],
-  "problem": {"C": null, "tau": null, "coefficient_bounds": {"lower": null, "upper": null}},
-  "solver": {"backend": "cplex", "threads": 1, "total_time_limit": null, "subproblem_time_limit": null, "mip_gap": null},
-  "search": {"max_iterations": null, "final_full_refinement": true, "final_refinement_fraction": null, "acceptance_epsilon": 1e-9, "seed": 0, "signal_options": {"use_l1": false, "use_pin": false, "use_lp": true, "lp_backend": "cplex", "lp_time_limit": null, "correlation_chunk_size": 256}},
-  "adks_policy": {
-    "initial_kernel_size": null, "minimum_kernel_size": null, "maximum_kernel_size": null,
-    "stagnation_threshold": null, "focus_fraction": null, "expansion_fraction": null,
-    "weights": {
-      "initial_fisher": null, "initial_mutual_information": null, "initial_lp_activation": null,
-      "keep_selected": null, "keep_abs_coefficient": null, "keep_selection_frequency": null,
-      "keep_slack_association": null, "keep_lp_activation": null, "keep_redundancy_penalty": null,
-      "keep_inactivity_penalty": null, "keep_kernel_age_penalty": null,
-      "add_fisher": null, "add_mutual_information": null, "add_lp_activation": null,
-      "add_slack_association": null, "add_nonredundancy": null, "add_selection_stability": null
+  "problem": {
+    "C": null,
+    "tau": null,
+    "coefficient_bounds": {
+      "lower": null,
+      "upper": null,
+      "author_confirmed": false
     }
   },
-  "classification": {"outer_folds": null, "outer_seed": null},
+  "solver": {
+    "backend": "cplex",
+    "threads": 1,
+    "total_time_limit": null,
+    "subproblem_time_limit": null,
+    "mip_gap": null
+  },
+  "search": {
+    "max_iterations": null,
+    "final_full_refinement": true,
+    "final_refinement_fraction": null,
+    "acceptance_epsilon": 1e-9,
+    "seed": 0,
+    "signal_options": {
+      "use_l1": false,
+      "use_pin": false,
+      "use_lp": true,
+      "lp_backend": "cplex",
+      "lp_time_limit": null,
+      "correlation_chunk_size": 64,
+      "use_fisher": true,
+      "use_mutual_information": false,
+      "use_correlation": false,
+      "allow_densify": false
+    }
+  },
+  "adks_policy": {
+    "initial_kernel_size": null,
+    "minimum_kernel_size": null,
+    "maximum_kernel_size": null,
+    "stagnation_threshold": null,
+    "focus_fraction": null,
+    "expansion_fraction": null,
+    "weights": {
+      "initial_fisher": null,
+      "initial_mutual_information": null,
+      "initial_lp_activation": null,
+      "keep_selected": null,
+      "keep_abs_coefficient": null,
+      "keep_selection_frequency": null,
+      "keep_slack_association": null,
+      "keep_lp_activation": null,
+      "keep_redundancy_penalty": null,
+      "keep_inactivity_penalty": null,
+      "keep_kernel_age_penalty": null,
+      "add_fisher": null,
+      "add_mutual_information": null,
+      "add_lp_activation": null,
+      "add_slack_association": null,
+      "add_nonredundancy": null,
+      "add_selection_stability": null
+    }
+  },
+  "classification": {
+    "outer_folds": 5,
+    "inner_folds": 3,
+    "outer_seed": null,
+    "inner_seed": null,
+    "parameter_grid": null,
+    "tuning_solver": {
+      "backend": "cplex",
+      "time_limit": null,
+      "mip_gap": null,
+      "threads": 1
+    }
+  },
   "frozen_policy_path": "artifacts_verapin/policies/frozen_verapin_policy.json",
-  "output": {"root": "results_verapin"}
+  "output": {
+    "root": "results_verapin"
+  },
+  "execution": {
+    "purpose": "scientific",
+    "require_frozen_method": true,
+    "solver_method_frozen": false
+  },
+  "preprocessing": {
+    "allow_densify": false
+  }
 }

@@ -13,7 +13,7 @@ from .benchmark_loaders import BENCHMARK_LOADERS
 DEFAULT_REGISTRY_PATH = Path(__file__).resolve().parents[2] / "configs" / "benchmark_registry.yaml"
 SPLIT_PARTITIONS = {"hill_valley": ("train", "test"), "madelon": ("train", "validation")}
 PARTITION_POLICIES = {"pool", "merge_labeled", "official_holdout"}
-PREPROCESSING_POLICIES = {"standard", "max_abs", "passthrough_upstream_normalized"}
+PREPROCESSING_POLICIES = {"standard", "standard_sparse", "max_abs", "none", "passthrough_upstream_normalized"}
 
 
 class _RegistryLoader(yaml.SafeLoader):

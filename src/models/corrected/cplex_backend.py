@@ -24,6 +24,7 @@ class CplexResult:
     backend: str = "docplex-cplex"
     progress: list[Any] = field(default_factory=list)
     mip_start_status: str | None = None
+    model_build_time: float = 0.0
 
 
 def solve_docplex(
@@ -45,6 +46,7 @@ def solve_docplex(
     deadline: float | None = None,
 ) -> CplexResult:
     """Solve a linear or convex quadratic model through local DOcplex/CPLEX."""
+    build_started = perf_counter()
     try:
         from docplex.mp.constants import EffortLevel, WriteLevel
         from docplex.mp.model import Model
@@ -151,6 +153,7 @@ def solve_docplex(
             model.add_progress_listener(recorder)
 
         solve_started = perf_counter()
+        model_build_time = solve_started - build_started
         solution = model.solve(log_output=log_stream if log_stream is not None else False)
         solve_elapsed = perf_counter() - solve_started
         details = model.solve_details
@@ -192,6 +195,7 @@ def solve_docplex(
             backend=backend,
             progress=progress,
             mip_start_status=mip_start_status,
+            model_build_time=model_build_time,
         )
     finally:
         model.end()

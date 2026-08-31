@@ -7,7 +7,7 @@ from typing import Iterable
 
 import numpy as np
 from scipy.optimize import Bounds, LinearConstraint, milp
-from scipy.sparse import lil_matrix
+from scipy.sparse import lil_matrix, issparse
 
 from src.models.corrected.base import (
     SolverDiagnostics,
@@ -62,13 +62,21 @@ def build_pin_fs_problem(
     for i in range(m):
         if i % 64 == 0:
             _check_build_deadline(deadline)
-        matrix[row, w_slice] = y[i] * X[i]
+        if issparse(X):
+            start, stop = X.indptr[i:i + 2]
+            indices, values = X.indices[start:stop], X.data[start:stop]
+        else:
+            indices = np.flatnonzero(X[i])
+            values = X[i, indices]
+        matrix.rows[row] = indices.tolist()
+        matrix.data[row] = (y[i] * values).tolist()
         matrix[row, b_index] = y[i]
         matrix[row, xi_slice.start + i] = 1.0
         row_lower[row] = 1.0
         row += 1
 
-        matrix[row, w_slice] = y[i] * X[i]
+        matrix.rows[row] = indices.tolist()
+        matrix.data[row] = (y[i] * values).tolist()
         matrix[row, b_index] = y[i]
         matrix[row, xi_slice.start + i] = -1.0 / tau
         row_upper[row] = 1.0
@@ -175,6 +183,7 @@ def solve_restricted_pin_fs(
     if mip_start is not None and backend != "cplex":
         raise ValueError("MIP starts are supported only when backend='cplex'")
 
+    build_started = perf_counter()
     problem = build_pin_fs_problem(
         X,
         y,
@@ -186,6 +195,7 @@ def solve_restricted_pin_fs(
         allowed_features=kernel,
         deadline=deadline,
     )
+    model_build_time = perf_counter() - build_started
     effective_time_limit = _effective_time_limit(time_limit, deadline)
     started = perf_counter()
     if backend == "cplex":
@@ -208,6 +218,7 @@ def solve_restricted_pin_fs(
         status = raw_result.status
         progress = list(raw_result.progress)
         mip_start_status = raw_result.mip_start_status
+        model_build_time += getattr(raw_result, "model_build_time", 0.0)
     else:
         options: dict[str, float] = {}
         if effective_time_limit is not None:
@@ -276,6 +287,7 @@ def solve_restricted_pin_fs(
         solve_time=solve_time,
         kernel=set(kernel),
         mip_start_status=mip_start_status,
+        model_build_time=model_build_time,
     )
 
 

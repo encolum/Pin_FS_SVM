@@ -1,0 +1,85 @@
+{
+  "description": "Provisional software pilot, not approved scientific settings. Run one explicitly selected benchmark at a time; no original inputs are rewritten.",
+  "execution": {
+    "purpose": "provisional_pilot",
+    "parameters_provisional": true,
+    "max_instances_per_run": 1
+  },
+  "instances": [
+    {
+      "id": "hill-valley-clean",
+      "kind": "benchmark",
+      "dataset": "hill_valley",
+      "source_partition_policy": "merge_labeled",
+      "research_split": "test",
+      "condition": "clean",
+      "feature_budget": 10
+    },
+    {
+      "id": "madelon-clean",
+      "kind": "benchmark",
+      "dataset": "madelon",
+      "source_partition_policy": "merge_labeled",
+      "research_split": "test",
+      "condition": "clean",
+      "feature_budget": 20
+    },
+    {
+      "id": "gina-clean",
+      "kind": "benchmark",
+      "dataset": "gina",
+      "source_partition_policy": "pool",
+      "research_split": "test",
+      "condition": "clean",
+      "feature_budget": 20
+    },
+    {
+      "id": "hiva-clean",
+      "kind": "benchmark",
+      "dataset": "hiva",
+      "source_partition_policy": "pool",
+      "research_split": "test",
+      "condition": "clean",
+      "feature_budget": 20
+    },
+    {
+      "id": "colon-clean",
+      "kind": "benchmark",
+      "dataset": "colon",
+      "source_partition_policy": "pool",
+      "research_split": "test",
+      "condition": "clean",
+      "feature_budget": 20
+    },
+    {
+      "id": "basehock-clean",
+      "kind": "benchmark",
+      "dataset": "basehock",
+      "source_partition_policy": "pool",
+      "research_split": "test",
+      "condition": "clean",
+      "feature_budget": 20
+    }
+  ],
+  "problem": {
+    "C": 1,
+    "tau": 0.5,
+    "coefficient_bounds": {
+      "lower": -2,
+      "upper": 2,
+      "author_confirmed": false
+    }
+  },
+  "solver": {
+    "backend": "cplex",
+    "threads": 1,
+    "total_time_limit": 60,
+    "mip_gap": 0.001
+  },
+  "preprocessing": {
+    "allow_densify": false
+  },
+  "output": {
+    "root": "results_verapin"
+  }
+}

@@ -38,6 +38,12 @@ from src.search.policies.handcrafted_adks import ADKSWeights, HandcraftedADKSPol
 from src.search.policies.static_ks import StaticKSPolicy
 from src.search.restricted_solver import solve_restricted_pin_fs
 from src.utils.serialization import read_json, write_json
+from src.utils.matrices import matrix_metadata
+from .benchmark_instances import (
+    CLEAN_SYNTHETIC_FIELDS, build_prepared_instances, research_split, corruption_choices,
+    assert_research_groups_disjoint,
+)
+from .readiness import check_execution_readiness, cplex_environment_report
 
 
 _SYNTHETIC_FIELDS = {
@@ -71,13 +77,16 @@ def validate_verapin_config(config: dict[str, Any], *, command: str) -> None:
         if not isinstance(instance, dict):
             raise ValueError(f"instances[{index}] must be a mapping")
         kind = instance.get("kind", "synthetic")
-        if kind not in {"synthetic", "dataset"}:
-            raise ValueError(f"instances[{index}].kind must be synthetic or dataset")
+        if kind not in {"synthetic", "dataset", "legacy_dataset", "benchmark"}:
+            raise ValueError(f"instances[{index}].kind must be synthetic, benchmark, or legacy_dataset")
+        split_field = "research_split" if "research_split" in instance else "split"
         required = (
-            {"id", "split", *_SYNTHETIC_FIELDS}
+            {"id", split_field, *(CLEAN_SYNTHETIC_FIELDS if instance.get("generation") == "clean" else _SYNTHETIC_FIELDS)}
             if kind == "synthetic"
-            else {"id", "split", "dataset", "condition", "feature_budget"}
+            else {"id", split_field, "dataset", "condition", "feature_budget"}
         )
+        if kind == "benchmark":
+            required.add("source_partition_policy")
         missing = sorted(required - set(instance))
         if missing:
             raise ValueError(f"instances[{index}] is missing fields: {missing}")
@@ -86,8 +95,24 @@ def validate_verapin_config(config: dict[str, Any], *, command: str) -> None:
         )
         if instance.get("id") is not None:
             instance_ids.append(str(instance["id"]))
-        if instance.get("split") not in {None, "train", "validation", "test"}:
+        if research_split(instance) not in {None, "train", "validation", "test"}:
             raise ValueError(f"instances[{index}].split must be train, validation, or test")
+        if instance.get("id") is not None:
+            import re
+            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", str(instance["id"])):
+                raise ValueError("instance IDs must be safe filename components")
+        if kind == "benchmark":
+            from src.data.benchmark_registry import read_benchmark_registry, validate_partition_policy, DEFAULT_REGISTRY_PATH
+            registry, _ = read_benchmark_registry(config.get("benchmark_registry", DEFAULT_REGISTRY_PATH))
+            if instance["dataset"] not in registry:
+                raise ValueError("unknown benchmark dataset")
+            validate_partition_policy(instance["dataset"], instance["source_partition_policy"])
+            if command == "evolve-verapin" and config.get("allow_real_benchmark_evolution") is not True:
+                raise ValueError("real benchmarks are held out from evolution unless explicitly overridden")
+        if kind == "benchmark" or instance.get("generation") == "clean":
+            corruption_choices(config, instance)
+            if command == "hardness" and instance.get("condition", "clean") != "clean":
+                raise ValueError("initial solver hardness protocol must be clean")
     if len(instance_ids) != len(set(instance_ids)):
         raise ValueError("instance IDs must be unique")
     required_paths = [
@@ -149,8 +174,12 @@ def validate_verapin_config(config: dict[str, Any], *, command: str) -> None:
                 "classification.outer_seed",
             ]
         )
+        if any(item.get("kind") == "benchmark" or item.get("generation") == "clean" for item in instances):
+            required_paths.extend(["classification.inner_folds", "classification.inner_seed",
+                "classification.parameter_grid", "classification.tuning_solver.time_limit",
+                "classification.tuning_solver.mip_gap"])
     unresolved.extend(path for path in required_paths if _get_path(config, path) is None)
-    splits = {instance.get("split") for instance in instances}
+    splits = {research_split(instance) for instance in instances}
     if command == "evolve-verapin" and "test" in splits:
         raise ValueError("evolution configuration must not contain held-out test instances")
     if command == "evaluate-verapin" and splits != {"test"}:
@@ -174,6 +203,21 @@ def validate_verapin_config(config: dict[str, Any], *, command: str) -> None:
     bounds = config["problem"]["coefficient_bounds"]
     if not float(bounds["lower"]) < 0 < float(bounds["upper"]):
         raise ValueError("problem coefficient bounds must satisfy lower < 0 < upper")
+    if not np.isfinite([config["problem"]["C"], config["problem"]["tau"], bounds["lower"], bounds["upper"],
+                        solver["total_time_limit"], solver["mip_gap"]]).all():
+        raise ValueError("problem and solver parameters must be finite")
+    if any(item.get("kind") == "benchmark" or item.get("generation") == "clean" for item in instances):
+        purpose = config.get("execution", {}).get("purpose", "scientific")
+        if bounds.get("author_confirmed") is not True and not (
+                purpose == "provisional_pilot" and config.get("execution", {}).get("parameters_provisional") is True):
+            raise ValueError("coefficient bounds require author approval or explicit provisional_pilot status")
+    if command == "evaluate-verapin":
+        for item in instances:
+            if item.get("kind", "synthetic") == "synthetic" and item.get("generation") != "clean":
+                if any(float(item[key]) != 0 for key in ("label_noise_rate", "outlier_sample_rate", "outlier_feature_rate", "outlier_scale")):
+                    raise ValueError("final synthetic data must use clean generation and post-split corruption")
+        if any(item.get("kind") == "benchmark" or item.get("generation") == "clean" for item in instances):
+            _validate_nested_classification(config)
     if command == "evolve-verapin":
         if not {"train", "validation"}.issubset(splits):
             raise ValueError("evolution requires separate train and validation instances")
@@ -218,8 +262,43 @@ def validate_verapin_config(config: dict[str, Any], *, command: str) -> None:
         verify_policy_file(config["frozen_policy_path"])
 
 
+def _validate_nested_classification(config):
+    classification = config.get("classification", {})
+    required = ("inner_folds", "inner_seed", "parameter_grid", "tuning_solver")
+    if any(classification.get(name) is None for name in required):
+        raise ValueError("benchmark classification requires inner_folds, inner_seed, parameter_grid, tuning_solver")
+    for name in ("inner_folds", "outer_folds"):
+        if type(classification.get(name)) is not int or classification[name] < 2:
+            raise ValueError(f"classification.{name} must be an integer >= 2")
+    for name in ("inner_seed", "outer_seed"):
+        if type(classification.get(name)) is not int or classification[name] < 0:
+            raise ValueError(f"classification.{name} must be a nonnegative integer")
+    if config.get("execution", {}).get("purpose") != "provisional_pilot" and (
+            classification["outer_folds"], classification["inner_folds"]) != (5, 3):
+        raise ValueError("scientific classification protocol requires 5 outer x 3 inner folds")
+    grid = classification["parameter_grid"]
+    if not isinstance(grid, dict) or set(grid) != {"B", "C", "tau"}:
+        raise ValueError("parameter_grid must declare exactly B, C and tau")
+    for name, values in grid.items():
+        if not isinstance(values, list) or not values:
+            raise ValueError("each parameter grid must be a nonempty list")
+        for value in values:
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not np.isfinite(value) or value <= 0:
+                raise ValueError("tuning parameters must be finite positive numbers")
+            if (name == "B" and type(value) is not int) or (name == "tau" and value > 1):
+                raise ValueError("B must be integer and tau must be <= 1")
+    tuning = classification["tuning_solver"]
+    if not isinstance(tuning, dict) or set(tuning) != {"backend", "time_limit", "mip_gap", "threads"}:
+        raise ValueError("tuning_solver needs explicit backend, time_limit, mip_gap, threads")
+    if tuning["backend"] not in {"cplex", "scipy"} or not np.isfinite(tuning["time_limit"]) or tuning["time_limit"] <= 0:
+        raise ValueError("invalid tuning backend or time limit")
+    if type(tuning["threads"]) is not int or tuning["threads"] < 1 or not np.isfinite(tuning["mip_gap"]) or tuning["mip_gap"] < 0:
+        raise ValueError("invalid tuning threads or gap")
+
+
 def run_hardness_benchmark(config: dict[str, Any]) -> Path:
     validate_verapin_config(config, command="hardness")
+    check_execution_readiness(config, "hardness")
     run_dir = _create_run_dir(config, "hardness")
     instances = _policy_instances(config, run_dir=run_dir)
     rows: list[dict[str, Any]] = []
@@ -230,12 +309,15 @@ def run_hardness_benchmark(config: dict[str, Any]) -> Path:
         details[instance.instance_id] = detail
     write_solver_profiles(run_dir, rows)
     write_json(run_dir / "cold_cplex_details.json", details)
-    _write_run_manifest(run_dir, config, instances, routes=["cold_cplex"])
+    successful = sum(row.get("final_objective") is not None for row in rows)
+    _write_run_manifest(run_dir, config, instances, routes=["cold_cplex"],
+                        status="complete" if successful == len(rows) else "partial" if successful else "failed")
     return run_dir
 
 
 def run_static_kernel_search(config: dict[str, Any]) -> Path:
     validate_verapin_config(config, command="kernel-search")
+    check_execution_readiness(config, "kernel-search")
     run_dir = _create_run_dir(config, "static-ks")
     instances = _policy_instances(config, run_dir=run_dir)
     return _run_kernel_route(
@@ -249,6 +331,7 @@ def run_static_kernel_search(config: dict[str, Any]) -> Path:
 
 def run_adks(config: dict[str, Any]) -> Path:
     validate_verapin_config(config, command="adks")
+    check_execution_readiness(config, "adks")
     run_dir = _create_run_dir(config, "adks")
     instances = _policy_instances(config, run_dir=run_dir)
     route_rows: list[dict[str, Any]] = []
@@ -284,6 +367,7 @@ def run_adks(config: dict[str, Any]) -> Path:
 
 def run_verapin_evolution(config: dict[str, Any], *, resume_dir: str | Path | None = None) -> Path:
     validate_verapin_config(config, command="evolve-verapin")
+    check_execution_readiness(config, "evolve-verapin")
     provider = _provider(config)
     seed_candidates = [_candidate(value, config) for value in config["seed_policies"]]
     run_dir = Path(resume_dir).resolve() if resume_dir else _create_run_dir(config, "evolution")
@@ -326,6 +410,7 @@ def run_verapin_evolution(config: dict[str, Any], *, resume_dir: str | Path | No
 def run_verapin_final(config: dict[str, Any]) -> Path:
     """Evaluate cold CPLEX, ADKS, and one frozen policy with no LLM provider."""
     validate_verapin_config(config, command="evaluate-verapin")
+    check_execution_readiness(config, "evaluate-verapin")
     run_dir = _create_run_dir(config, "final")
     instances = _policy_instances(config, run_dir=run_dir, outer_evaluation=True)
     candidate = PolicyCandidate.from_dict(read_json(config["frozen_policy_path"]))
@@ -495,7 +580,12 @@ def _apply_common_reference(
     instance_ids = sorted({str(row["instance_id"]) for row in rows})
     for instance_id in instance_ids:
         instance_rows = [row for row in rows if str(row["instance_id"]) == instance_id]
-        reference = min(float(row["final_objective"]) for row in instance_rows)
+        feasible = [float(row["final_objective"]) for row in instance_rows
+                    if row.get("final_objective") is not None and np.isfinite(row["final_objective"])]
+        reference = min(feasible) if feasible else None
+        horizon = max(max(float(details[f"{instance_id}:{row['route']}"]["total_runtime"]),
+                          float(details[f"{instance_id}:{row['route']}"].get("time_budget", 0)))
+                      for row in instance_rows)
         for row in instance_rows:
             key = f"{instance_id}:{row['route']}"
             if key not in details:
@@ -506,12 +596,13 @@ def _apply_common_reference(
             ]
             summary = solver_progress_summary(
                 trajectory,
-                horizon=float(detail["total_runtime"]),
+                horizon=horizon,
                 reference_objective=reference,
             )
             row.update(summary)
             row["primal_integral_reference_objective"] = reference
             row["primal_integral_reference_scope"] = "best_known_across_routes"
+            row["primal_integral_horizon"] = horizon
             row["gap_scope"] = "full_model_only"
 
 
@@ -551,6 +642,24 @@ def _run_engine(instance: PolicyInstance, config: dict[str, Any], policy):
 def _run_cold(
     instance: PolicyInstance, solver: dict[str, Any]
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    started = perf_counter()
+    try:
+        return _run_cold_impl(instance, solver)
+    except Exception as exc:
+        # Solver/license/time-limit failures are evidence, not successful hard
+        # instances. Keep an auditable failure instead of losing the run report.
+        runtime = perf_counter() - started
+        status = "license_limit" if "1016" in str(exc) else "failed"
+        return ({"instance_id": instance.instance_id, **_instance_identity(instance),
+                 "route": "cold_cplex", "solver_status": status, "error": str(exc),
+                 "final_objective": None, "final_gap": None, "node_count": None,
+                 "first_feasible_time": None, "total_runtime": runtime,
+                 "memory_estimate": matrix_metadata(instance.X)},
+                {"progress": [], "total_runtime": runtime, "time_budget": solver["total_time_limit"],
+                 "diagnostics": {"status": status, "error": str(exc)}})
+
+
+def _run_cold_impl(instance: PolicyInstance, solver: dict[str, Any]):
     started = perf_counter()
     result = solve_restricted_pin_fs(
         instance.X,
@@ -596,6 +705,8 @@ def _run_cold(
         "lp_relaxation_overhead": 0.0,
         "mip_start_status": None,
         "solver_status": result.diagnostics.status,
+        "model_build_time": result.model_build_time,
+        "memory_estimate": matrix_metadata(instance.X),
         "selected_feature_count": len(result.support),
         "selected_feature_indices": sorted(result.support),
     }
@@ -604,6 +715,7 @@ def _run_cold(
         row.update(classification)
     detail = {
         "progress": [asdict(record) for record in route_progress],
+        "time_budget": solver["total_time_limit"],
         "total_runtime": runtime,
         "diagnostics": result.diagnostics.to_dict(),
         "coefficients": result.coefficients,
@@ -636,7 +748,12 @@ def _policy_instances(
     bounds = problem["coefficient_bounds"]
     result: list[PolicyInstance] = []
     for specification in config["instances"]:
-        if specification.get("kind", "synthetic") == "dataset":
+        if specification.get("kind") == "benchmark" or specification.get("generation") == "clean":
+            result.extend(build_prepared_instances(config, {"kind": "synthetic", **specification},
+                run_dir=run_dir, outer_evaluation=outer_evaluation))
+            continue
+        specification = {**specification, "split": research_split(specification)}
+        if specification.get("kind", "synthetic") in {"dataset", "legacy_dataset"}:
             raw_X, y = load_dataset(
                 str(specification["dataset"]),
                 str(specification["condition"]),
@@ -691,7 +808,7 @@ def _policy_instances(
             )
         else:
             X = raw_X
-            if specification.get("kind", "synthetic") == "dataset":
+            if specification.get("kind", "synthetic") in {"dataset", "legacy_dataset"}:
                 X, _, _ = fit_transform_training(raw_X)
             result.append(
                 PolicyInstance(
@@ -709,6 +826,7 @@ def _policy_instances(
                     base_instance_id=str(specification["id"]),
                 )
             )
+    assert_research_groups_disjoint(result)
     return result
 
 
@@ -846,6 +964,7 @@ def _candidate(value: Any, config: dict[str, Any]) -> PolicyCandidate:
 
 def _kernel_detail(result) -> dict[str, Any]:
     return {
+        "time_budget": result.metadata.get("time_budget", result.total_runtime),
         "progress": list(result.metadata.get("route_progress", [])),
         "total_runtime": result.total_runtime,
         "history": result.history,
@@ -878,6 +997,7 @@ def _write_run_manifest(
     instances: list[PolicyInstance],
     *,
     routes: list[str],
+    status: str = "complete",
 ) -> None:
     write_json(
         run_dir / "manifest.json",
@@ -890,6 +1010,10 @@ def _write_run_manifest(
                     or instance.instance_id,
                     "outer_fold": instance.outer_fold,
                     "split": instance.split,
+                    "research_split": instance.research_split,
+                    "data_preparation": instance.metadata,
+                    "B": instance.B, "C": instance.C, "tau": instance.tau,
+                    "coefficient_bounds": instance.coefficient_bounds,
                     "instance_hash": instance.instance_hash,
                     "optimization_partition": "outer_train"
                     if instance.X_test is not None
@@ -907,7 +1031,10 @@ def _write_run_manifest(
                 "same_preprocessing": True,
                 "online_overhead_included": True,
             },
-            "status": "complete",
+            "status": status,
+            "execution": config.get("execution", {}),
+            "cplex_environment": cplex_environment_report(),
+            "real_benchmarks_held_out_from_evolution": not config.get("allow_real_benchmark_evolution", False),
         },
     )
 

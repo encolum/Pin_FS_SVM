@@ -7,6 +7,7 @@ from time import perf_counter
 from typing import Any
 
 import numpy as np
+from src.utils.matrices import numeric_matrix
 
 
 @dataclass
@@ -24,29 +25,27 @@ class SolverDiagnostics:
 
 
 def validate_training_data(X: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    X = np.asarray(X, dtype=float)
-    y = np.asarray(y, dtype=int).reshape(-1)
+    X = numeric_matrix(X)
+    y = np.asarray(y).reshape(-1)
     if X.ndim != 2 or X.shape[0] == 0 or X.shape[1] == 0:
         raise ValueError("X must be a non-empty two-dimensional array")
     if X.shape[0] != y.shape[0]:
         raise ValueError("X and y contain different numbers of observations")
-    if not np.isfinite(X).all():
-        raise ValueError("X contains NaN or infinite values")
-    if set(np.unique(y)) != {-1, 1}:
+    if y.dtype.kind not in "iuf" or not np.isfinite(y).all() or set(np.unique(y)) != {-1, 1}:
         raise ValueError("y must contain both binary labels {-1, +1}")
-    return X, y
+    return X, y.astype(int)
 
 
 def validate_positive(value: float, name: str) -> float:
     value = float(value)
-    if value <= 0:
+    if not np.isfinite(value) or value <= 0:
         raise ValueError(f"{name} must be positive")
     return value
 
 
 def validate_coefficient_bounds(lower: float, upper: float) -> tuple[float, float]:
     lower, upper = float(lower), float(upper)
-    if not lower < 0 < upper:
+    if not np.isfinite([lower, upper]).all() or not lower < 0 < upper:
         raise ValueError("coefficient bounds must satisfy lower < 0 < upper")
     return lower, upper
 
@@ -105,7 +104,7 @@ class BaseLinearClassifier:
     def decision_function(self, X: np.ndarray) -> np.ndarray:
         if self.w_ is None or self.b_ is None:
             raise ValueError("model is not fitted")
-        X = np.asarray(X, dtype=float)
+        X = numeric_matrix(X)
         if X.ndim != 2 or X.shape[1] != self.w_.shape[0]:
             raise ValueError("X has an incompatible feature dimension")
         return X @ self.w_ + self.b_

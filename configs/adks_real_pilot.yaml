@@ -1,0 +1,107 @@
+{
+  "description": "Provisional ADKS comparison; execution requires evidence of at least two nontrivial hardness instances.",
+  "execution": {
+    "purpose": "provisional_pilot",
+    "parameters_provisional": true,
+    "max_instances_per_run": 1,
+    "require_hardness_evidence": true,
+    "hardness_reports": []
+  },
+  "instances": [
+    {
+      "id": "hill-valley-clean",
+      "kind": "benchmark",
+      "dataset": "hill_valley",
+      "source_partition_policy": "merge_labeled",
+      "research_split": "test",
+      "condition": "clean",
+      "feature_budget": 10
+    },
+    {
+      "id": "madelon-clean",
+      "kind": "benchmark",
+      "dataset": "madelon",
+      "source_partition_policy": "merge_labeled",
+      "research_split": "test",
+      "condition": "clean",
+      "feature_budget": 20
+    },
+    {
+      "id": "gina-clean",
+      "kind": "benchmark",
+      "dataset": "gina",
+      "source_partition_policy": "pool",
+      "research_split": "test",
+      "condition": "clean",
+      "feature_budget": 20
+    }
+  ],
+  "problem": {
+    "C": 1,
+    "tau": 0.5,
+    "coefficient_bounds": {
+      "lower": -2,
+      "upper": 2,
+      "author_confirmed": false
+    }
+  },
+  "solver": {
+    "backend": "cplex",
+    "threads": 1,
+    "total_time_limit": 60,
+    "mip_gap": 0.001,
+    "subproblem_time_limit": 10
+  },
+  "preprocessing": {
+    "allow_densify": false
+  },
+  "output": {
+    "root": "results_verapin"
+  },
+  "search": {
+    "max_iterations": 5,
+    "final_full_refinement": true,
+    "final_refinement_fraction": 0.4,
+    "acceptance_epsilon": 1e-9,
+    "seed": 17,
+    "signal_options": {
+      "use_fisher": true,
+      "use_mutual_information": false,
+      "use_correlation": false,
+      "use_l1": false,
+      "use_pin": false,
+      "use_lp": true,
+      "lp_backend": "cplex",
+      "lp_time_limit": 10,
+      "correlation_chunk_size": 64,
+      "allow_densify": false
+    }
+  },
+  "adks_policy": {
+    "initial_kernel_size": 30,
+    "minimum_kernel_size": 20,
+    "maximum_kernel_size": 100,
+    "stagnation_threshold": 2,
+    "focus_fraction": 0.25,
+    "expansion_fraction": 0.5,
+    "weights": {
+      "initial_fisher": 1,
+      "initial_mutual_information": 0,
+      "initial_lp_activation": 1,
+      "keep_selected": 4,
+      "keep_abs_coefficient": 2,
+      "keep_selection_frequency": 1,
+      "keep_slack_association": 1,
+      "keep_lp_activation": 1,
+      "keep_redundancy_penalty": 0,
+      "keep_inactivity_penalty": 0.1,
+      "keep_kernel_age_penalty": 0.1,
+      "add_fisher": 1,
+      "add_mutual_information": 0,
+      "add_lp_activation": 1,
+      "add_slack_association": 1,
+      "add_nonredundancy": 0,
+      "add_selection_stability": 1
+    }
+  }
+}

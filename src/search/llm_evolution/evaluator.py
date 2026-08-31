@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from src.utils.matrices import update_array_hash
 
 from src.evaluation.metrics import classification_metrics
 from src.utils.serialization import read_json, write_json
@@ -36,18 +37,23 @@ class PolicyInstance:
     y_test: np.ndarray | None = None
     base_instance_id: str | None = None
     outer_fold: int | None = None
+    metadata: dict = field(default_factory=dict)
+
+    @property
+    def research_split(self):
+        return self.split  # compatibility alias; not a source partition or outer fold
 
     @property
     def instance_hash(self) -> str:
         digest = sha256()
         digest.update(self.instance_id.encode("utf-8"))
         digest.update(self.split.encode("utf-8"))
-        digest.update(np.ascontiguousarray(self.X).view(np.uint8))
-        digest.update(np.ascontiguousarray(self.y).view(np.uint8))
+        update_array_hash(digest, self.X)
+        update_array_hash(digest, self.y)
         if self.X_test is not None:
-            digest.update(np.ascontiguousarray(self.X_test).view(np.uint8))
+            update_array_hash(digest, self.X_test)
         if self.y_test is not None:
-            digest.update(np.ascontiguousarray(self.y_test).view(np.uint8))
+            update_array_hash(digest, self.y_test)
         digest.update(
             repr(
                 (

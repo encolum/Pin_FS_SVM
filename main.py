@@ -71,14 +71,18 @@ def build_parser() -> argparse.ArgumentParser:
     ):
         sub = subparsers.add_parser(command)
         sub.add_argument("--config", default=default)
+        sub.add_argument("--instance", action="append", help="run only the named instance (repeatable)")
+        sub.add_argument("--validate-only", action="store_true", help="validate config without creating a run or solving")
 
     evolve = subparsers.add_parser("evolve-verapin")
     evolve.add_argument("--config", default="configs/verapin_evolution.yaml")
     evolve.add_argument("--resume", metavar="RUN_DIR")
+    evolve.add_argument("--validate-only", action="store_true")
 
     evaluate = subparsers.add_parser("evaluate-verapin")
     evaluate.add_argument("--config", default="configs/verapin_final.yaml")
     evaluate.add_argument("--confirm-full-run", action="store_true")
+    evaluate.add_argument("--validate-only", action="store_true")
 
     verify_policy = subparsers.add_parser("verify-policy")
     verify_policy.add_argument("--policy", required=True)
@@ -200,10 +204,22 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         config = load_config(args.config)
+        selected = getattr(args, "instance", None)
+        if selected:
+            known = {item["id"] for item in config.get("instances", [])}
+            if set(selected) - known:
+                parser.error("unknown instance selection")
+            config["instances"] = [item for item in config["instances"] if item["id"] in selected]
         try:
             validate_verapin_config(config, command=args.command)
+            if not args.validate_only:
+                from src.experiments.readiness import check_execution_readiness
+                check_execution_readiness(config, args.command)
         except ValueError as exc:
             parser.error(str(exc))
+        if args.validate_only:
+            print("VeraPin configuration valid; no run directory, solver or LLM call created.")
+            return 0
         if args.command == "evaluate-verapin" and not args.confirm_full_run:
             parser.error("held-out VeraPin evaluation requires --confirm-full-run")
         print(f"VeraPin command: {args.command}")
@@ -222,7 +238,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             output = run_verapin_final(config)
         print(f"Completed VeraPin run: {output}")
-        return 0
+        from src.utils.serialization import read_json
+        return 0 if read_json(Path(output) / "manifest.json")["status"] == "complete" else 1
 
     config = load_config(args.config)
     try:

@@ -1,0 +1,46 @@
+{
+  "description": "Small clean synthetic CPLEX software pilot; all numeric parameters are provisional QA choices.",
+  "execution": {
+    "purpose": "provisional_pilot",
+    "parameters_provisional": true,
+    "max_instances_per_run": 1
+  },
+  "instances": [
+    {
+      "id": "synthetic-clean-pilot",
+      "kind": "synthetic",
+      "generation": "clean",
+      "research_split": "test",
+      "condition": "clean",
+      "n_samples": 40,
+      "n_features": 20,
+      "informative_ratio": 0.25,
+      "redundant_ratio": 0.25,
+      "correlation_strength": 0.8,
+      "positive_class_fraction": 0.5,
+      "feature_budget_ratio": 0.25,
+      "seed": 41
+    }
+  ],
+  "problem": {
+    "C": 1,
+    "tau": 0.5,
+    "coefficient_bounds": {
+      "lower": -2,
+      "upper": 2,
+      "author_confirmed": false
+    }
+  },
+  "solver": {
+    "backend": "cplex",
+    "threads": 1,
+    "total_time_limit": 5,
+    "mip_gap": 0.001
+  },
+  "preprocessing": {
+    "allow_densify": false
+  },
+  "output": {
+    "root": "results_verapin"
+  }
+}
