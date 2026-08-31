@@ -1,0 +1,49 @@
+# Solver-facing views only. No raw files are rewritten; preprocessing is declared,
+# not fitted/applied by the adapter. Experimental parameters remain separately gated.
+hill_valley:
+  loader: hill_valley
+  source_partition_policy: merge_labeled
+  label_mapping: {0: -1, 1: 1}
+  storage: dense
+  preprocessing: standard
+  expected_features: 100
+
+madelon:
+  loader: madelon
+  source_partition_policy: merge_labeled
+  label_mapping: {-1: -1, 1: 1}
+  storage: dense
+  preprocessing: standard
+  expected_features: 500
+
+gina:
+  loader: gina
+  source_partition_policy: pool
+  label_mapping: {"-1": -1, "1": 1}
+  storage: dense
+  preprocessing: standard
+  expected_features: 970
+
+hiva:
+  loader: hiva
+  source_partition_policy: pool
+  label_mapping: {"-1": -1, "1": 1}
+  storage: dense
+  preprocessing: standard
+  expected_features: 1617
+
+colon:
+  loader: colon
+  source_partition_policy: pool
+  label_mapping: {-1: -1, 1: 1}
+  storage: csr
+  preprocessing: passthrough_upstream_normalized
+  expected_features: 2000
+
+basehock:
+  loader: basehock
+  source_partition_policy: pool
+  label_mapping: {1: -1, 2: 1}
+  storage: csr
+  preprocessing: max_abs
+  expected_features: 4862
