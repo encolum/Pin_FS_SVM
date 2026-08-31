@@ -53,6 +53,38 @@ or deleted and no archived results were removed.
 
 ## Verification and actual execution
 
+### Post-merge scientific feedback corrections (2026-08-31)
+
+- Policy fitness now uses immutable, policy-independent baseline references and
+  the configured common time horizon. Cold full Pin-FS and fixed ADKS each get
+  one full configured baseline budget per instance, before any LLM candidate is
+  scored. References and provenance are persisted and strictly reused on resume;
+  missing/invalid anchors abort evaluation. Reference/horizon changes invalidate
+  instance hashes, cache entries and checkpoints. Cache keys also cover target
+  gap and failure normalization. Progress after the common horizon is excluded.
+- Benchmark inner tuning records active support (`abs(w) > 1e-3`) per fold and
+  uses the existing main-pipeline tie key: mean support, `B`, parameter-value
+  order, with the same default score tolerance. Partial/failed candidates remain
+  in the audit but cannot be selected.
+- Corruption protocol v2 adds standalone label noise, preserves sparse structural
+  zeros, uses disjoint mixed feature masks, and records effective rather than
+  merely sampled corruption. Feature outlier severity is relative to each clean
+  training-feature population standard deviation; zero-variance features remain
+  unchanged. Combined corruption freezes these scales before its first stage.
+  Existing noisy artifacts/checkpoints are retained, not relabeled as v2.
+
+This correction does not launch research evolution, hardness or final experiments.
+Only bounded automated solver fixtures and read-only data validation are used.
+Verification after the corrections: **293 passed / 3 skipped** (12.65 s); the
+three skips are the unchanged external legacy-manuscript dataset tests.
+Solver-facing validation passed **6/6 benchmarks**; original-input validation
+passed **8/8 partitions** with zero missing values and verified source hashes.
+Reports: `artifacts_v2/feedback_benchmark_validation.json` and
+`artifacts_v2/feedback_original_validation.json` (ignored local artifacts).
+The raw `dataset/` tree and its manifest have no changes.
+
+### Original full-integration verification
+
 Baseline: 208 passed / 3 skipped. Full integration: **256 passed / 3 skipped**.
 Full-suite checks cover dense/CSR equivalence
 with SciPy and CPLEX, all six real adapters, safe preprocessing, blocked

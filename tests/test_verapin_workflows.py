@@ -1,10 +1,57 @@
 import csv
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from src.experiments.verapin import run_static_kernel_search, run_verapin_final
 from src.utils.serialization import read_json, write_json
+
+
+@pytest.mark.parametrize("references_fail", [False, True])
+def test_evolution_workflow_prepares_references_before_provider(tmp_path, monkeypatch, references_fail):
+    from src.experiments import verapin
+    from src.search.llm_evolution import references
+    from src.search.llm_evolution.schemas import PolicyCandidate
+
+    config = {
+        "instances": [_instance("train"), {**_instance("validation"), "seed": 11}],
+        "problem": {"C": 1., "tau": .5, "coefficient_bounds": {"lower": -4., "upper": 4.}},
+        "solver": {"backend": "scipy", "threads": 1, "total_time_limit": 3., "subproblem_time_limit": 1., "mip_gap": 0.},
+        "search": _search(), "adks_policy": _adks(), "seed_policies": [_candidate()],
+        "evolution": {"generations": 1, "population_size": 1, "parent_count": 1,
+                      "candidates_per_generation": 1, "maximum_similarity": 1., "seed": 1},
+        "fitness": {"weights": {"primal_integral": 1., "final_gap": 1., "failure_rate": 1., "overhead": 1.},
+                    "normalization": {"primal_integral_scale": 3., "final_gap_scale": 1., "overhead_scale": 1.},
+                    "target_gap": .01},
+        "llm": {"provider": "mock", "responses": ["unused"]},
+        "output": {"root": str(tmp_path / "runs")}, "frozen_policy_output": str(tmp_path / "frozen.json"),
+    }
+    if references_fail:
+        monkeypatch.setattr(references, "_reference_route", lambda *a, **k: {"objective": None})
+    events = []
+    def provider(*args):
+        assert not references_fail
+        artifact, = (tmp_path / "runs").glob("*/fitness_references.json")
+        assert read_json(artifact)["status"] == "complete"
+        events.append("provider")
+        return object()
+    def evolve(**kwargs):
+        for instance in kwargs["training_instances"] + kwargs["validation_instances"]:
+            assert instance.reference_objective is not None and instance.fitness_horizon == 3.
+        events.append("evolution")
+        return SimpleNamespace(frozen_candidate=PolicyCandidate.from_dict(_candidate()))
+    monkeypatch.setattr(verapin, "_provider", provider)
+    monkeypatch.setattr(verapin, "run_evolution", evolve)  # No candidate generation or LLM call.
+    monkeypatch.setattr(verapin, "_write_validation_baseline_comparison", lambda *a, **k: None)
+    if references_fail:
+        with pytest.raises(RuntimeError, match="evolution aborted"):
+            verapin.run_verapin_evolution(config)
+        assert not events
+    else:
+        output = verapin.run_verapin_evolution(config)
+        assert events == ["provider", "evolution"]
+        assert all(row["fitness_horizon"] == 3. for row in read_json(output / "manifest.json")["instances"])
 
 
 def _instance(split):

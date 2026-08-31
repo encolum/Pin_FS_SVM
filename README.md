@@ -139,19 +139,51 @@ instances. Evolution additionally requires a frozen ADKS baseline, fixed budgets
 defined research groups and profiled signals. These are explicit execution gates,
 not settings that validation approves automatically.
 
+Before scoring any LLM policy, evolution precomputes one fixed reference per
+training/validation instance from cold full Pin-FS and Handcrafted ADKS, each
+with `solver.total_time_limit`. With the CPLEX backend this is Cold CPLEX; SciPy
+is available for small software tests. The minimum feasible in-budget objective
+is saved in `fitness_references.json`; no reference means evolution stops.
+This adds two offline baseline budgets per instance, outside candidate fitness.
+Every policy uses the same horizon `T = solver.total_time_limit`, including the
+tail after early stopping, and the reference never changes when a policy beats it.
+Instance/cache hashes include reference and horizon; scoring caches also include
+protocol version, target gap and failure normalization. Resume requires the
+original references and matching data/configuration. Start a new run for old
+checkpoints without these anchors; do not mix old and new fitness scores.
+
 Final benchmark evaluation uses `configs/verapin_final.yaml`: nested stratified
 5 outer × 3 inner folds, full/reduced Pin-FS tuning by inner Balanced Accuracy,
 then frozen `B/C/tau` shared by Cold CPLEX, ADKS and a frozen VeraPin policy. No
 ADKS/VeraPin runs occur inside tuning and no LLM is used during final evaluation.
 Unresolved scientific values and the frozen policy artifact remain required.
+Ties within `classification.selection_tolerance` (default `1e-12`) prefer fewer
+mean active features (`abs(w) > 1e-3`), then smaller `B`, then the same deterministic
+parameter-value order as the main nested-CV pipeline. Counts are saved per inner
+fold; failed or incomplete candidates cannot win tuning.
 
 For generated data, use `generation: clean` with `research_split` separately from
-`source_partition_policy` and `outer_fold`. Optional `mixed`, `feature_outlier`,
+`source_partition_policy` and `outer_fold`. Optional `label_noise`, `mixed`, `feature_outlier`,
 `combined` (mixed + feature outliers), or `high_margin_label_attack` profiles require
 explicit parameters under `corruption.profiles` and explicit `corruption.seeds`.
 Only preprocessed training data is corrupted. Each seed is a separate comparison
 instance with identical matrices/masks across routes; clean test hashes are saved.
 Sparse feature corruption also requires an explicit `max_modified_cells` cap.
+`label_noise` needs only `label_flip_rate` and works for all six benchmarks without
+changing features. In corruption protocol v2, sparse feature masks sample only
+numerically nonzero entries (stored zeros are excluded); dense masks sample all
+entries. Additive/multiplicative masks within `mixed` are disjoint, so their rates
+must sum to at most one. Counts are rounded; multiplicative count is capped to
+the remaining eligible cells if rounding exceeds capacity. Their effective rates
+use eligible cells as denominator and are reported separately from sampled counts.
+Sparse structural zeros are never filled, and zero-severity no-ops are not counted
+as changes. Feature outliers sample rows/columns, perturb only eligible cells in
+their intersection, and use `scale × std_j` from clean, preprocessed training
+features (population standard deviation, including implicit zeros). This scale is
+frozen before either stage of `combined`; constant features remain unchanged.
+Manifests store scales, selected/effective masks, counts and rates. Version 2
+changes noisy realizations for a given seed; do not pool them with legacy noisy
+outputs. Clean inputs/hardness and original dataset bytes are unchanged.
 
 CSR remains sparse through Pin-FS construction, prediction, hashing and safe
 preprocessing (`standard_sparse`, `max_abs`, `none`, or upstream-normalized

@@ -30,6 +30,7 @@ from src.search.llm_evolution.evaluator import (
 from src.search.llm_evolution.evolution import EvolutionConfig, run_evolution
 from src.search.llm_evolution.provider import EnvironmentLLMProvider, MockProvider
 from src.search.llm_evolution.replay import evolution_audit, load_replay_provider
+from src.search.llm_evolution.references import prepare_fitness_references
 from src.search.llm_evolution.schemas import PolicyCandidate
 from src.search.objectives import solver_progress_summary
 from src.search.progress import SolverProgressRecord
@@ -264,6 +265,9 @@ def validate_verapin_config(config: dict[str, Any], *, command: str) -> None:
 
 def _validate_nested_classification(config):
     classification = config.get("classification", {})
+    tolerance = float(classification.get("selection_tolerance", 1e-12))
+    if not np.isfinite(tolerance) or tolerance < 0:
+        raise ValueError("classification.selection_tolerance must be finite and non-negative")
     required = ("inner_folds", "inner_seed", "parameter_grid", "tuning_solver")
     if any(classification.get(name) is None for name in required):
         raise ValueError("benchmark classification requires inner_folds, inner_seed, parameter_grid, tuning_solver")
@@ -368,12 +372,15 @@ def run_adks(config: dict[str, Any]) -> Path:
 def run_verapin_evolution(config: dict[str, Any], *, resume_dir: str | Path | None = None) -> Path:
     validate_verapin_config(config, command="evolve-verapin")
     check_execution_readiness(config, "evolve-verapin")
-    provider = _provider(config)
     seed_candidates = [_candidate(value, config) for value in config["seed_policies"]]
     run_dir = Path(resume_dir).resolve() if resume_dir else _create_run_dir(config, "evolution")
     if resume_dir is not None and not (run_dir / "checkpoint.json").is_file():
         raise ValueError("resume directory does not contain checkpoint.json")
     instances = _policy_instances(config, run_dir=run_dir)
+    instances = prepare_fitness_references(instances, solver_config=_engine_config(config),
+        adks_config=config["adks_policy"], output_path=run_dir / "fitness_references.json",
+        reuse=resume_dir is not None)
+    provider = _provider(config)
     training = [instance for instance in instances if instance.split == "train"]
     validation = [instance for instance in instances if instance.split == "validation"]
     fitness = config["fitness"]
@@ -1006,6 +1013,8 @@ def _write_run_manifest(
             "instances": [
                 {
                     "instance_id": instance.instance_id,
+                    "reference_objective": instance.reference_objective,
+                    "fitness_horizon": instance.fitness_horizon,
                     "base_instance_id": instance.base_instance_id
                     or instance.instance_id,
                     "outer_fold": instance.outer_fold,

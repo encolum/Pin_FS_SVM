@@ -10,12 +10,14 @@ from src.utils.serialization import read_json, write_json
 
 from .candidate_parser import CandidateValidationError, parse_candidates, validate_candidate
 from .evaluator import (
+    FITNESS_PROTOCOL_VERSION,
     FitnessNormalization,
     FitnessWeights,
     PolicyEvaluation,
     PolicyEvaluationCache,
     PolicyInstance,
     evaluate_policy,
+    validate_fitness_protocol,
 )
 from .population import PopulationMember, select_strong_diverse, update_population
 from .prompt_builder import build_evolution_prompt
@@ -71,6 +73,7 @@ def run_evolution(
 ) -> EvolutionResult:
     """Evolve on training only, select on validation only, and never accept test data."""
     _validate_partitions(training_instances, validation_instances)
+    validate_fitness_protocol(training_instances + validation_instances, solver_config)
     seed_candidates = [validate_candidate(candidate) for candidate in seed_candidates]
     run_dir = Path(run_dir).resolve()
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -330,6 +333,7 @@ def _run_signature(
     evolution.pop("generations", None)
     return {
         "evolution_without_generation_limit": evolution,
+        "fitness_protocol_version": FITNESS_PROTOCOL_VERSION,
         "solver_config": solver_config,
         "fitness_weights": asdict(fitness_weights),
         "fitness_normalization": asdict(normalization),

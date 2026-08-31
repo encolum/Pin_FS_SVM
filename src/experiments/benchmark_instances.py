@@ -16,6 +16,7 @@ from src.data.corruptions import apply_corruption, array_hash, validate_corrupti
 from src.data.preprocessing import fit_preprocessor, transform_partition
 from src.data.synthetic import generate_clean_synthetic_instance, save_synthetic_instance
 from src.evaluation.metrics import classification_metrics
+from src.evaluation.nested_cv import _selection_tie_key
 from src.search.llm_evolution.evaluator import PolicyInstance
 from src.search.restricted_solver import solve_restricted_pin_fs
 from src.utils.matrices import matrix_metadata
@@ -81,6 +82,9 @@ def select_inner_parameters(X_train, y_train, *, classification, preprocessing, 
     """Exact/reduced solver tuning on outer train only, never ADKS or VeraPin."""
     grid = classification["parameter_grid"]
     tuning = classification["tuning_solver"]
+    selection_tolerance = float(classification.get("selection_tolerance", 1e-12))
+    if not np.isfinite(selection_tolerance) or selection_tolerance < 0:
+        raise ValueError("selection_tolerance must be finite and non-negative")
     folds = _folds(X_train, y_train, classification["inner_folds"], classification["inner_seed"])
     prepared = []
     fold_records = []
@@ -94,7 +98,7 @@ def select_inner_parameters(X_train, y_train, *, classification, preprocessing, 
     records = []
     for B, C, tau in product(grid["B"], grid["C"], grid["tau"]):
         parameters = {"B": int(B), "C": float(C), "tau": float(tau)}
-        scores, errors = [], []
+        scores, selected_counts, errors, fold_results = [], [], [], []
         for fold, (X, y, X_validation, y_validation) in enumerate(prepared, 1):
             try:
                 result = solve_restricted_pin_fs(X, y, kernel=set(range(X.shape[1])),
@@ -103,19 +107,37 @@ def select_inner_parameters(X_train, y_train, *, classification, preprocessing, 
                     deadline=perf_counter() + tuning["time_limit"])
                 prediction = np.where(X_validation @ result.coefficients + result.intercept >= 0, 1, -1)
                 scores.append(classification_metrics(y_validation, prediction)["balanced_accuracy"])
+                selected_counts.append(int(np.count_nonzero(np.abs(result.coefficients) > 1e-3)))
+                fold_results.append({"inner_fold": fold, "balanced_accuracy": scores[-1],
+                                     "selected_feature_count": selected_counts[-1]})
             except (ValueError, RuntimeError) as exc:
                 errors.append({"inner_fold": fold, "error": str(exc)})
+                fold_results.append({"inner_fold": fold, "balanced_accuracy": None,
+                                     "selected_feature_count": None, "error": str(exc)})
         records.append({"parameters": parameters, "balanced_accuracy_by_fold": scores,
+                        "selected_feature_count_folds": selected_counts,
+                        "mean_selected_feature_count": float(np.mean(selected_counts)) if not errors else None,
+                        "fold_results": fold_results,
                         "mean_balanced_accuracy": float(np.mean(scores)) if not errors else None,
                         "errors": errors})
     valid = [record for record in records if record["mean_balanced_accuracy"] is not None]
     if not valid:
         raise RuntimeError("all inner-tuning candidates failed; cannot select scientific parameters")
-    best = min(valid, key=lambda row: (-row["mean_balanced_accuracy"],
-                                      row["parameters"]["B"], row["parameters"]["C"], row["parameters"]["tau"]))
+    best = valid[0]
+    for row in valid[1:]:
+        score, best_score = row["mean_balanced_accuracy"], best["mean_balanced_accuracy"]
+        if score > best_score + selection_tolerance or (
+            abs(score - best_score) <= selection_tolerance
+            and _selection_tie_key(row["parameters"], row["mean_selected_feature_count"])
+            < _selection_tie_key(best["parameters"], best["mean_selected_feature_count"])
+        ):
+            best = row
     return best["parameters"], {"selection": "inner_balanced_accuracy", "test_data_used": False,
         "route": "full_pin_fs_only", "folds": fold_records, "candidates": records,
-        "selected_parameters": best["parameters"], "solver": dict(tuning)}
+        "selected_parameters": best["parameters"], "solver": dict(tuning),
+        "selection_tolerance": selection_tolerance,
+        "tie_break": ["mean_selected_feature_count", "B", "parameter_order"],
+        "active_feature_threshold": 1e-3}
 
 
 def build_prepared_instances(config, spec, *, run_dir, outer_evaluation=False):

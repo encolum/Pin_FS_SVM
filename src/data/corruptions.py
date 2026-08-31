@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from hashlib import sha256
 from typing import Any
 
 import numpy as np
 from scipy import sparse
+from sklearn.utils.sparsefuncs import mean_variance_axis
 from src.utils.matrices import data_hash, numeric_matrix
 
 from src.models.corrected.l1_svm import L1SVM
@@ -32,7 +32,8 @@ def validate_corruption_profile(condition, config):
         validate_corruption_profile("mixed", _required_mapping(config, "mixed"))
         validate_corruption_profile(second, _required_mapping(config, second))
         return
-    fields = {"mixed": ("label_flip_rate", "additive_rate", "multiplicative_rate", "additive_std", "multiplicative_std"),
+    fields = {"label_noise": ("label_flip_rate",),
+              "mixed": ("label_flip_rate", "additive_rate", "multiplicative_rate", "additive_std", "multiplicative_std"),
               "feature_outlier": ("sample_rate", "feature_rate", "scale"),
               "high_margin": ("flip_rate", "reference_C"),
               "high_margin_label_attack": ("flip_rate", "reference_C")}
@@ -44,6 +45,8 @@ def validate_corruption_profile(condition, config):
             _rate_count(config[key], 1)
     if "reference_C" in fields[condition] and float(config["reference_C"]) <= 0:
         raise ValueError("reference_C must be positive")
+    if condition == "mixed" and float(config["additive_rate"]) + float(config["multiplicative_rate"]) > 1:
+        raise ValueError("disjoint additive_rate + multiplicative_rate must be <= 1")
 
 
 def apply_corruption(
@@ -67,6 +70,12 @@ def apply_corruption(
     input_digest = array_hash(X, y)
     if condition == "clean":
         return CorruptionResult(X.copy(), y.copy(), _manifest(condition, seed, config, input_digest, X, y))
+    if condition == "label_noise":
+        profile = {**config, "additive_rate": 0., "multiplicative_rate": 0.,
+                   "additive_std": 0., "multiplicative_std": 0.}
+        result = _mixed(X, y, seed=seed, config=profile, input_digest=input_digest)
+        result.manifest.update(condition=condition, parameters=config)
+        return result
     if condition == "mixed":
         return _mixed(X, y, seed=seed, config=config, input_digest=input_digest)
     if condition == "feature_outlier":
@@ -74,6 +83,8 @@ def apply_corruption(
     if condition in {"high_margin", "high_margin_label_attack"}:
         return _high_margin(X, y, seed=seed, config=config, input_digest=input_digest)
     if condition == "combined":
+        # Freeze scale BEFORE either corruption stage, using clean training only.
+        scale_options = {"feature_scale": _training_feature_scale(X)} if "feature_outlier" in config else {}
         mixed_config = _required_mapping(config, "mixed")
         mixed = _mixed(X, y, seed=seed, config=mixed_config, input_digest=input_digest)
         # Preserve the explicitly named legacy combined profile; new scientific
@@ -86,6 +97,7 @@ def apply_corruption(
             seed=seed + 1,
             config=margin_config,
             input_digest=array_hash(mixed.X, mixed.y),
+            **scale_options,
         )
         manifest = _manifest(condition, seed, config, input_digest, margin.X, margin.y)
         manifest["stages"] = [mixed.manifest, margin.manifest]
@@ -101,27 +113,38 @@ def _mixed(X: np.ndarray, y: np.ndarray, *, seed: int, config: dict[str, Any], i
     label_count = _rate_count(config["label_flip_rate"], y.size)
     label_indices = np.sort(rng.choice(y.size, size=label_count, replace=False)) if label_count else np.array([], dtype=int)
     y_out[label_indices] *= -1
-    total_cells = int(X.shape[0] * X.shape[1])
+    eligible = _eligible_sparse_cells(X) if sparse.issparse(X) else None
+    total_cells = len(eligible) if eligible is not None else int(X.shape[0] * X.shape[1])
     additive_count = _rate_count(config["additive_rate"], total_cells)
-    multiplicative_count = _rate_count(config["multiplicative_rate"], total_cells)
+    # Rounding two disjoint proportions can exceed N by one; additive first.
+    multiplicative_count = min(total_cells - additive_count, _rate_count(config["multiplicative_rate"], total_cells))
     _sparse_corruption_guard(X, additive_count + multiplicative_count, config)
-    additive_flat = np.sort(rng.choice(total_cells, size=additive_count, replace=False)) if additive_count else np.array([], dtype=int)
-    multiplicative_flat = np.sort(rng.choice(total_cells, size=multiplicative_count, replace=False)) if multiplicative_count else np.array([], dtype=int)
+    selected = rng.choice(total_cells, size=additive_count + multiplicative_count, replace=False)
+    if eligible is not None:
+        selected = eligible[selected]
+    additive_flat = np.sort(selected[:additive_count])
+    multiplicative_flat = np.sort(selected[additive_count:])
     if additive_count:
         X_out = _modify_cells(X_out, additive_flat, rng.normal(0.0, float(config["additive_std"]), size=additive_count))
     if multiplicative_count:
         X_out = _modify_cells(X_out, multiplicative_flat,
                              rng.normal(1.0, float(config["multiplicative_std"]), size=multiplicative_count), multiply=True)
     manifest = _manifest("mixed", seed, config, input_digest, X_out, y_out)
+    changed = _feature_noise_audit(manifest, X, X_out, total_cells,
+                                   {"additive": additive_flat, "multiplicative": multiplicative_flat})
     manifest.update({
         "flipped_label_indices": label_indices.tolist(),
+        "label_changed_count": int(label_count),
+        "label_effective_rate": label_count / y.size,
+        "masks_disjoint": True,
+        "rounding_policy": "round counts; cap multiplicative to remaining eligible cells",
         "additive_cells": _cell_pairs(additive_flat, X.shape[1]),
         "multiplicative_cells": _cell_pairs(multiplicative_flat, X.shape[1]),
         "modified_sample_indices": np.unique(
-            np.concatenate([label_indices, additive_flat // X.shape[1], multiplicative_flat // X.shape[1]])
+            np.concatenate([label_indices, changed // X.shape[1]])
         ).astype(int).tolist(),
         "modified_feature_indices": np.unique(
-            np.concatenate([additive_flat % X.shape[1], multiplicative_flat % X.shape[1]])
+            changed % X.shape[1]
         ).astype(int).tolist(),
     })
     return CorruptionResult(X_out, y_out, manifest)
@@ -167,33 +190,90 @@ def _sparse_corruption_guard(X, count, config):
 
 def _modify_cells(X, flat_indices, values, *, multiply=False):
     if not sparse.issparse(X):
-        flat = X.reshape(-1)
+        rows, columns = flat_indices // X.shape[1], flat_indices % X.shape[1]
         if multiply:
-            flat[flat_indices] *= values
+            X[rows, columns] *= values
         else:
-            flat[flat_indices] += values
+            X[rows, columns] += values
         return X
-    result = X.tolil(copy=True)
-    for index, value in zip(flat_indices, values):
-        row, column = divmod(int(index), X.shape[1])
-        result[row, column] = result[row, column] * value if multiply else result[row, column] + value
-    return result.tocsr()
+    result = X.tocsr(copy=True)
+    # CSR data updates cannot introduce new structural nonzeros or densify.
+    stored = np.repeat(np.arange(X.shape[0]), np.diff(result.indptr)) * X.shape[1] + result.indices
+    positions = np.searchsorted(stored, flat_indices)
+    if multiply:
+        result.data[positions] *= values
+    else:
+        result.data[positions] += values
+    return result
 
 
-def _feature_outlier(X, y, *, seed, config, input_digest):
+def _feature_outlier(X, y, *, seed, config, input_digest, feature_scale=None):
     _require_numeric(config, ("sample_rate", "feature_rate", "scale"))
     rng = np.random.default_rng(seed)
     n_rows = _rate_count(config["sample_rate"], X.shape[0])
     n_columns = _rate_count(config["feature_rate"], X.shape[1])
-    _sparse_corruption_guard(X, n_rows * n_columns, config)
     rows = np.sort(rng.choice(X.shape[0], n_rows, replace=False))
     columns = np.sort(rng.choice(X.shape[1], n_columns, replace=False))
-    indices = (rows[:, None] * X.shape[1] + columns).ravel()
-    result = _modify_cells(X.copy(), indices, rng.normal(scale=float(config["scale"]), size=len(indices)))
+    if sparse.issparse(X):
+        eligible = _eligible_sparse_cells(X)
+        total_cells = len(eligible)
+        indices = eligible[np.isin(eligible // X.shape[1], rows) & np.isin(eligible % X.shape[1], columns)]
+    else:
+        total_cells = int(X.shape[0] * X.shape[1])
+        indices = (rows[:, None] * X.shape[1] + columns).ravel()
+    _sparse_corruption_guard(X, len(indices), config)
+    if feature_scale is None:
+        feature_scale = _training_feature_scale(X)
+    deviations = float(config["scale"]) * feature_scale[indices % X.shape[1]]
+    result = _modify_cells(X.copy(), indices, rng.normal(scale=deviations, size=len(indices)))
     manifest = _manifest("feature_outlier", seed, config, input_digest, result, y)
-    manifest.update(modified_sample_indices=rows.tolist(), modified_feature_indices=columns.tolist(),
-                    outlier_cells=_cell_pairs(indices, X.shape[1]), flipped_label_indices=[])
+    changed = _feature_noise_audit(manifest, X, result, total_cells, {"outlier": indices})
+    manifest.update(selected_sample_indices=rows.tolist(), selected_feature_indices=columns.tolist(),
+                    modified_sample_indices=np.unique(changed // X.shape[1]).tolist(),
+                    modified_feature_indices=np.unique(changed % X.shape[1]).tolist(),
+                    outlier_cells=_cell_pairs(indices, X.shape[1]), flipped_label_indices=[],
+                    feature_scale=feature_scale.tolist(),
+                    feature_scale_source="clean_preprocessed_training_population_std",
+                    zero_variance_policy="leave unchanged; report as selected but ineffective")
     return CorruptionResult(result, y.copy(), manifest)
+
+
+def _eligible_sparse_cells(X):
+    # nonzero() excludes explicitly stored zeros, unlike CSR.nnz.
+    rows, columns = X.nonzero()
+    return rows.astype(np.int64) * X.shape[1] + columns
+
+
+def _training_feature_scale(X):
+    if sparse.issparse(X):
+        _, variance = mean_variance_axis(X, axis=0)
+        scale = np.sqrt(np.maximum(variance, 0.))
+    else:
+        scale = np.std(X, axis=0, ddof=0)
+    if not np.isfinite(scale).all():
+        raise ValueError("training feature scale must be finite")
+    return scale
+
+
+def _feature_noise_audit(manifest, before, after, eligible_count, masks):
+    """Distinguish sampled cells from effective changes (e.g. zero severity)."""
+    manifest.update(feature_sampling="nonzero_entries" if sparse.issparse(before) else "all_entries",
+                    eligible_feature_cells=int(eligible_count))
+    changed_masks = []
+    for name, indices in masks.items():
+        rows, columns = indices // before.shape[1], indices % before.shape[1]
+        # SciPy returns a sparse (1, 0) slice for empty paired indexing.
+        old = np.asarray(before[rows, columns]).reshape(-1) if indices.size else np.empty(0)
+        new = np.asarray(after[rows, columns]).reshape(-1) if indices.size else np.empty(0)
+        if not np.isfinite(new).all():
+            raise ValueError("feature corruption produced nonfinite values")
+        changed = indices[old != new]
+        changed_masks.append(changed)
+        manifest.update({f"{name}_selected_count": int(len(indices)),
+                         f"{name}_changed_count": int(len(changed)),
+                         f"{name}_effective_rate": len(changed) / eligible_count if eligible_count else 0.,
+                         f"effective_{name}_cells": _cell_pairs(changed, before.shape[1])})
+    return np.unique(np.concatenate(changed_masks)).astype(np.int64)
 
 
 def _manifest(
@@ -205,6 +285,7 @@ def _manifest(
     y_out: np.ndarray,
 ) -> dict[str, Any]:
     return {
+        "corruption_protocol_version": 2,
         "condition": condition,
         "random_seed": int(seed),
         "parameters": config,

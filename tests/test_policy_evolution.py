@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 
 import pytest
 
@@ -59,6 +60,8 @@ def _instance(instance_id, split, seed):
         1.0,
         0.5,
         (-4.0, 4.0),
+        reference_objective=18.0,  # Fixed fixture reference, never derived from a candidate.
+        fitness_horizon=2.0,
     )
 
 
@@ -137,6 +140,19 @@ def test_resume_rejects_generation_limit_below_checkpoint(tmp_path):
             generations=1,
             resume=True,
         )
+
+
+def test_resume_rejects_changed_fitness_reference(tmp_path, monkeypatch):
+    response = json.dumps({"candidates": [_candidate("mutation").to_dict()]})
+    _run(tmp_path, MockProvider([response]), generations=1)
+    original_instance = _instance
+    def changed(*args, **kwargs):
+        return replace(original_instance(*args, **kwargs), reference_objective=17.)
+    monkeypatch.setitem(globals(), "_instance", changed)
+    provider = MockProvider([response])
+    with pytest.raises(ValueError, match="instance hashes differ"):
+        _run(tmp_path, provider, generations=2, resume=True)
+    assert not provider.records
 
 
 def test_evolution_rejects_overlapping_train_validation_ids(tmp_path):

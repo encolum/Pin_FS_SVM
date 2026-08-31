@@ -81,6 +81,40 @@ def test_nested_tuning_never_sees_outer_test_and_freezes_parameters(tmp_path, mo
     assert all(len(y) == 6 for _, y, _ in calls)
 
 
+@pytest.mark.parametrize("support_by_budget,grid,expected", [
+    ({1: 1, 2: 0}, {"B": [1, 2], "C": [1.], "tau": [.5]}, {"B": 2, "C": 1., "tau": .5}),
+    ({1: 0, 2: 0}, {"B": [2, 1], "C": [1.], "tau": [.5]}, {"B": 1, "C": 1., "tau": .5}),
+    ({1: 0}, {"B": [1], "C": [10., 2.], "tau": [.7, .3]}, {"B": 1, "C": 2., "tau": .3}),
+])
+def test_nested_tie_break_matches_main_pipeline_sparsity_budget_and_parameter_order(
+        tmp_path, monkeypatch, support_by_budget, grid, expected):
+    def solve(X, y, **kwargs):
+        weights = np.full(X.shape[1], 1e-3)  # Boundary is inactive, even if v_j = 1.
+        weights[:support_by_budget[kwargs["B"]]] = 1.
+        return SimpleNamespace(coefficients=weights, intercept=1000.)
+    monkeypatch.setattr(preparation, "solve_restricted_pin_fs", solve)
+    config = tiny_config()
+    config["classification"]["parameter_grid"] = grid
+    instances = _policy_instances(config, run_dir=tmp_path, outer_evaluation=True)
+    for instance in instances:
+        tuning = instance.metadata["inner_tuning"]
+        assert tuning["selected_parameters"] == expected
+        for candidate in tuning["candidates"]:
+            expected_count = support_by_budget[candidate["parameters"]["B"]]
+            assert candidate["selected_feature_count_folds"] == [expected_count] * 2
+            assert candidate["mean_selected_feature_count"] == expected_count
+            assert [fold["selected_feature_count"] for fold in candidate["fold_results"]] == [expected_count] * 2
+
+
+def test_nested_tie_break_applies_score_tolerance(tmp_path, monkeypatch):
+    monkeypatch.setattr(preparation, "solve_restricted_pin_fs", lambda X, y, **k:
+        SimpleNamespace(coefficients=np.full(X.shape[1], 1. if k["B"] == 1 else 0.), intercept=1000.))
+    scores = iter([.8, .8, .8 - 5e-13, .8 - 5e-13] * 2)
+    monkeypatch.setattr(preparation, "classification_metrics", lambda *a: {"balanced_accuracy": next(scores)})
+    instances = _policy_instances(tiny_config(), run_dir=tmp_path, outer_evaluation=True)
+    assert all(instance.B == 2 for instance in instances)
+
+
 def test_all_failed_inner_candidates_abort_instead_of_selecting_partial_scores(tmp_path, monkeypatch):
     def fail(*args, **kwargs):
         raise RuntimeError("no incumbent")

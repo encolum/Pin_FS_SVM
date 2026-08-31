@@ -38,6 +38,7 @@ class PolicyInstance:
     base_instance_id: str | None = None
     outer_fold: int | None = None
     metadata: dict = field(default_factory=dict)
+    fitness_horizon: float | None = None
 
     @property
     def research_split(self):
@@ -63,6 +64,8 @@ class PolicyInstance:
                     self.coefficient_bounds,
                     self.base_instance_id,
                     self.outer_fold,
+                    self.reference_objective,
+                    self.fitness_horizon,
                 )
             ).encode("utf-8")
         )
@@ -147,6 +150,22 @@ class PolicyEvaluationCache:
             write_json(self.root / f"{key}.json", value)
 
 
+FITNESS_PROTOCOL_VERSION = 2
+
+
+def validate_fitness_protocol(instances: list[PolicyInstance], solver_config: dict[str, Any]) -> float:
+    """Reject missing/mismatched scoring anchors before solving or calling an LLM."""
+    horizon = float(solver_config["total_time_limit"])
+    if not np.isfinite(horizon) or horizon <= 0:
+        raise ValueError("fitness horizon must be finite and positive")
+    for instance in instances:
+        if instance.reference_objective is None or not np.isfinite(instance.reference_objective):
+            raise ValueError(f"{instance.instance_id}: precompute a finite reference_objective before policy evaluation")
+        if instance.fitness_horizon != horizon:
+            raise ValueError(f"{instance.instance_id}: fitness_horizon must equal solver total_time_limit")
+    return horizon
+
+
 def evaluate_policy(
     candidate: PolicyCandidate,
     instances: list[PolicyInstance],
@@ -169,10 +188,15 @@ def evaluate_policy(
     if required_split not in {"train", "validation", "test"}:
         raise ValueError("required_split must be train, validation, or test")
     target_gap = float(target_gap)
-    if target_gap < 0:
-        raise ValueError("target_gap must be non-negative")
+    if not np.isfinite(target_gap) or target_gap < 0:
+        raise ValueError("target_gap must be finite and non-negative")
+    horizon = validate_fitness_protocol(instances, solver_config)
     cache = cache or PolicyEvaluationCache()
-    config_hash = _canonical_hash(solver_config)
+    config_hash = _canonical_hash({
+        "fitness_protocol_version": FITNESS_PROTOCOL_VERSION,
+        "solver": solver_config, "horizon": horizon, "target_gap": target_gap,
+        "failure_normalization": asdict(normalization),
+    })
     policy = FrozenVeraPinPolicy(candidate)
     rows: list[dict[str, Any]] = []
 
@@ -199,7 +223,9 @@ def evaluate_policy(
             trajectory = [
                 SolverProgressRecord(**record)
                 for record in result.metadata.get("route_progress", [])
+                if 0 <= record["elapsed_seconds"] <= horizon
             ]
+            trajectory.sort(key=lambda record: record.elapsed_seconds)
             final_gap = trajectory[-1].relative_gap if trajectory else None
             overhead = float(result.metadata.get("signal_overhead", 0.0)) + float(
                 result.metadata.get("policy_overhead", 0.0)
@@ -208,13 +234,16 @@ def evaluate_policy(
             )
             integral = primal_integral(
                 trajectory,
-                horizon=result.total_runtime,
+                horizon=horizon,
                 reference_objective=instance.reference_objective,
             )
             row = {
                 "instance_id": instance.instance_id,
                 "instance_hash": instance.instance_hash,
                 "split": instance.split,
+                "fitness_protocol_version": FITNESS_PROTOCOL_VERSION,
+                "reference_objective": instance.reference_objective,
+                "horizon": horizon,
                 "failed": False,
                 "primal_integral": integral,
                 "final_gap": 1.0 if final_gap is None else float(final_gap),
@@ -240,6 +269,9 @@ def evaluate_policy(
                 "instance_id": instance.instance_id,
                 "instance_hash": instance.instance_hash,
                 "split": instance.split,
+                "fitness_protocol_version": FITNESS_PROTOCOL_VERSION,
+                "reference_objective": instance.reference_objective,
+                "horizon": horizon,
                 "failed": True,
                 "exception_type": type(exc).__name__,
                 "message": str(exc),
