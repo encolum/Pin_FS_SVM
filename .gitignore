@@ -23,7 +23,3 @@ tmp/
 *.xlsx
 *.xls
 *.ipynb
-
-# Preserve original documentation and illustration supplied with these datasets.
-!/dataset/madelon/Dataset.pdf
-!/dataset/hill+valley/Hill_Valley_visual_examples.jpg

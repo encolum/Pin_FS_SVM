@@ -3,7 +3,5 @@ dataset/** -text -whitespace
 dataset/*.npz binary
 dataset/*.mat binary
 dataset/*.bz2 binary
-dataset/**/*.jpg binary
-dataset/**/*.pdf binary
 dataset/README.md text eol=lf !whitespace
 dataset/manifest.json text eol=lf !whitespace

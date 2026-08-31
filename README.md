@@ -4,7 +4,7 @@ This repository contains the refactored experimental pipeline for the Pin-FS-SVM
 manuscript. The executable implementation is centered on `main.py`, the corrected
 models in `src/models/corrected/`, and the experiment definitions in `configs/`.
 
-The checkout preserves the original uploaded benchmark files under `dataset/`, with
+The checkout preserves the selected original benchmark inputs under `dataset/`, with
 provenance, checksums, and explicit partitions in [dataset/README.md](dataset/README.md).
 The original manuscript data under `Dataset/Dataset/`, local environments,
 generated results, plots, reports, and logs remain excluded from version control.
@@ -44,14 +44,27 @@ declared in `src/data/loaders.py`. Then validate and run the pilot:
 .venv/bin/python main.py pilot --config configs/pilot.yaml
 ```
 
-The uploaded benchmarks are stored unchanged: original formats, labels, dtypes,
-filenames, and train/test/validation files. No conversion or new benchmark loader
-is applied. Their byte-level integrity can be checked without loading the data or
-running an experiment:
+The retained benchmarks have unchanged original formats, labels and values; only
+paths are simplified. Hill-Valley keeps only without-noise train/test, and Madelon
+keeps labeled train/validation separately. Six read-only loaders inspect
+these inputs without preprocessing or rewriting them. Verify byte integrity
+or inspect actual shapes, dtypes, class counts, missing values, and sparsity:
 
 ```bash
 .venv/bin/python -m pytest tests/test_dataset_originals.py -q
+.venv/bin/python main.py validate-datasets
 ```
+
+Measured results are embedded in the `validation` block of
+[dataset/manifest.json](dataset/manifest.json), alongside provenance, checksums
+and the cleanup inventory. To explicitly refresh only that validation block:
+
+```bash
+.venv/bin/python main.py validate-datasets --update-manifest
+```
+
+This audit does not run hardness profiling or any experiment. See
+[dataset/README.md](dataset/README.md) for loader APIs and native label conventions.
 
 These uploads remain separate from the original six-dataset manuscript loader;
 existing experiment configs have not been changed to silently substitute them.

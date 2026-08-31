@@ -24,6 +24,14 @@ def build_parser() -> argparse.ArgumentParser:
     validate = subparsers.add_parser("validate", help="audit all dataset files and optionally a config")
     validate.add_argument("--config")
 
+    raw_data = subparsers.add_parser("validate-datasets", help="inspect original uploads; no training")
+    raw_data.add_argument("--data-root")
+    report_destination = raw_data.add_mutually_exclusive_group()
+    report_destination.add_argument("--output", help="export a separate JSON validation report")
+    report_destination.add_argument("--update-manifest", action="store_true",
+                                    help="refresh only the validation block in dataset/manifest.json")
+    raw_data.add_argument("--overwrite", action="store_true", help="replace an existing validation report")
+
     for command, default in (
         ("pilot", "configs/pilot.yaml"),
         ("sensitivity", "configs/sensitivity.yaml"),
@@ -78,6 +86,34 @@ def main(argv: list[str] | None = None) -> int:
     if args.command is None:
         parser.print_help()
         return 0
+    if args.command == "validate-datasets":
+        from src.data.benchmark_validation import (
+            audit_benchmark_datasets, update_dataset_validation, write_validation_manifest,
+        )
+
+        try:
+            report = audit_benchmark_datasets(data_root=args.data_root)
+            if args.output:
+                write_validation_manifest(report, args.output, data_root=args.data_root,
+                                          overwrite=args.overwrite)
+            elif args.update_manifest:
+                update_dataset_validation(report, data_root=args.data_root)
+        except (ValueError, OSError) as exc:
+            parser.error(str(exc))
+        print(f"Original benchmark validation: {report['status']}; {report['summary']}")
+        for row in report["partitions"]:
+            name = "/".join(str(row[key]) for key in ("dataset", "variant", "partition") if row[key])
+            if row["X"] is not None:
+                X, y = row["X"], row["y"]
+                print(f"  {name}: {row['status']}; shape={X['shape']}, X={X['dtype']}, "
+                      f"y={y['dtype']}, classes={y['class_counts']}, "
+                      f"missing_X={X['missing_values']}, missing_y={y['missing_values']}, "
+                      f"sparsity={X['sparsity']:.6%}")
+            for error in row["errors"]:
+                print(f"  {name}: {error}")
+        for error in report["integrity"]["errors"]:
+            print(f"  Integrity error: {error}")
+        return 0 if report["status"] == "passed" else 1
     if args.command == "validate":
         report = audit_datasets(include_archived_variants=True)
         if args.config:

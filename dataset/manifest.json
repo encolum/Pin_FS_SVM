@@ -1,111 +1,833 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "representation": "original_uploads",
+  "layout": "minimal_six_benchmarks",
   "transformation": "none",
-  "description": "Uploaded files preserved byte-for-byte, with original filenames and internal directory structure. No format, dtype, label, feature or split changes.",
+  "description": "Selected original inputs, renamed/moved only. Feature values, label values, file formats and official labeled partitions are unchanged.",
   "files": [
     {
       "path": "BASEHOCK.mat",
+      "original_path": "BASEHOCK.mat",
       "bytes": 279059,
       "sha256": "e0452e0f3c0fefdc5cb6352165e4ba4a25c3a2a7b5a5b4d44e103742d6317aa0"
     },
     {
       "path": "colon-cancer.bz2",
+      "original_path": "colon-cancer.bz2",
       "bytes": 609480,
       "sha256": "724d7291efb9a833b8407442a27f70f64beeb86c107d7b3ce98e8c48fe878867"
     },
     {
-      "path": "download.py",
-      "bytes": 272,
-      "sha256": "6d4678bf65a07d803c496f7d9805109bc72dab6aaf4ce81363064b473d77f2be"
-    },
-    {
       "path": "gina.npz",
+      "original_path": "gina.npz",
       "bytes": 26919267,
       "sha256": "ef4147ba955b5348966bcb92f6418491f3c5acea494c2ce41d3bb5afa6ced255"
     },
     {
-      "path": "hill+valley/Hill-Valley.names",
-      "bytes": 2226,
-      "sha256": "3d09bb2221404d3282a22023e0d96edf5bdfa67911de4272b448a3ca6cf7ae06"
-    },
-    {
-      "path": "hill+valley/Hill_Valley_sample_arff.text",
-      "bytes": 2485,
-      "sha256": "437856dd49a0f1bff0295d9afa48e5b460f31d93e413270b5154133b471ffef2"
-    },
-    {
-      "path": "hill+valley/Hill_Valley_visual_examples.jpg",
-      "bytes": 51811,
-      "sha256": "fc7874636eb464169f007693c1d5c0fde2ca07da8beee633490419de3788a7df"
-    },
-    {
-      "path": "hill+valley/Hill_Valley_with_noise_Testing.data",
-      "bytes": 420871,
-      "sha256": "d7276840d9e4327f362269baca8af5e68ae1336052e57c95bde7b150669e4871"
-    },
-    {
-      "path": "hill+valley/Hill_Valley_with_noise_Training.data",
-      "bytes": 417361,
-      "sha256": "aef62398c3a215452bcf4ce5c6a87207a3dc8e79631ef87a6eda6fe3896bc966"
-    },
-    {
-      "path": "hill+valley/Hill_Valley_without_noise_Testing.data",
-      "bytes": 722774,
-      "sha256": "2d36201a54f6e8de6bd5dad99391c1a9754b95a3364c3461567795302882902f"
-    },
-    {
-      "path": "hill+valley/Hill_Valley_without_noise_Training.data",
-      "bytes": 722695,
-      "sha256": "af232ff5258abeb5b1c61974648fd00bc0d37a545de33a2c3493692fc20330d5"
-    },
-    {
       "path": "hiva.npz",
+      "original_path": "hiva.npz",
       "bytes": 54715455,
       "sha256": "f4d9b8a0e5797bbc54e66c713d0d8bb3d6a6cfe69b787c1a41f59cccbeb9a49c"
     },
     {
-      "path": "madelon/Dataset.pdf",
-      "bytes": 453565,
-      "sha256": "9a1752b81c45e1d2924d341269f0856a6530b74742c572353180708dacfa3d0b"
+      "path": "hill_valley/train.data",
+      "original_path": "hill+valley/Hill_Valley_without_noise_Training.data",
+      "bytes": 722695,
+      "sha256": "af232ff5258abeb5b1c61974648fd00bc0d37a545de33a2c3493692fc20330d5"
     },
     {
-      "path": "madelon/MADELON/madelon.param",
-      "bytes": 266,
-      "sha256": "c65bcf86fb79b284c2e628c0a8cf47b89f49aca14ca3a85e68f9f8a2f031f1b1"
+      "path": "hill_valley/test.data",
+      "original_path": "hill+valley/Hill_Valley_without_noise_Testing.data",
+      "bytes": 722774,
+      "sha256": "2d36201a54f6e8de6bd5dad99391c1a9754b95a3364c3461567795302882902f"
     },
     {
-      "path": "madelon/MADELON/madelon_test.data",
-      "bytes": 3601795,
-      "sha256": "93efc31148c850645520fbd8eae4422ac5e4861dc6454d2eceae7e93c1e2badb"
-    },
-    {
-      "path": "madelon/MADELON/madelon_train.data",
+      "path": "madelon/train.data",
+      "original_path": "madelon/MADELON/madelon_train.data",
       "bytes": 4001995,
       "sha256": "0b6e37711efdc7ab74250c51e7d6966bffd9f8f2b0e9971e882c3a7a380c2314"
     },
     {
-      "path": "madelon/MADELON/madelon_train.labels",
+      "path": "madelon/train.labels",
+      "original_path": "madelon/MADELON/madelon_train.labels",
       "bytes": 5000,
       "sha256": "10bffcc3b017467cb810d326b931951adcbde2b4870faf981da2991993b48689"
     },
     {
-      "path": "madelon/MADELON/madelon_valid.data",
+      "path": "madelon/valid.data",
+      "original_path": "madelon/MADELON/madelon_valid.data",
       "bytes": 1200599,
       "sha256": "cb9a46475147de1a58d9f15ef4c318e5b85de344e0f9ab92626fa446aa815dc9"
     },
     {
-      "path": "madelon/madelon_valid.labels",
+      "path": "madelon/valid.labels",
+      "original_path": "madelon/madelon_valid.labels",
       "bytes": 1500,
       "sha256": "fbac32fa87fac41ab731994a1c824e7b25396069bff6df242c01fe240fcb34dc"
     }
   ],
-  "excluded_from_git": [
+  "removed_files": [
     {
-      "path": "madelon/.DS_Store",
-      "bytes": 8196,
-      "sha256": "2a9f1f5dadcd0ef06525e482efeb5d4ba1bd8d1e55b7b744d5dd27c1a1d96a8b",
-      "reason": "Operating-system metadata; retained in the local original backup."
+      "original_path": "download.py",
+      "bytes": 272,
+      "sha256": "6d4678bf65a07d803c496f7d9805109bc72dab6aaf4ce81363064b473d77f2be",
+      "reason": "Download completed; OpenML source IDs preserved in README.",
+      "recovery": "Preserved in the external original/cleanup backups and original-upload Git history."
+    },
+    {
+      "original_path": "hill+valley/Hill-Valley.names",
+      "bytes": 2226,
+      "sha256": "3d09bb2221404d3282a22023e0d96edf5bdfa67911de4272b448a3ca6cf7ae06",
+      "reason": "User-requested removal; source attribution and label conventions retained in README.",
+      "recovery": "Preserved in the external original/cleanup backups and original-upload Git history."
+    },
+    {
+      "original_path": "hill+valley/Hill_Valley_sample_arff.text",
+      "bytes": 2485,
+      "sha256": "437856dd49a0f1bff0295d9afa48e5b460f31d93e413270b5154133b471ffef2",
+      "reason": "Format example, not required benchmark input.",
+      "recovery": "Preserved in the external original/cleanup backups and original-upload Git history."
+    },
+    {
+      "original_path": "hill+valley/Hill_Valley_visual_examples.jpg",
+      "bytes": 51811,
+      "sha256": "fc7874636eb464169f007693c1d5c0fde2ca07da8beee633490419de3788a7df",
+      "reason": "Illustration, not required benchmark input.",
+      "recovery": "Preserved in the external original/cleanup backups and original-upload Git history."
+    },
+    {
+      "original_path": "hill+valley/Hill_Valley_with_noise_Training.data",
+      "bytes": 417361,
+      "sha256": "aef62398c3a215452bcf4ce5c6a87207a3dc8e79631ef87a6eda6fe3896bc966",
+      "reason": "Exclude upstream noisy variant; future noise generation is a separate experiment step.",
+      "recovery": "Preserved in the external original/cleanup backups and original-upload Git history."
+    },
+    {
+      "original_path": "hill+valley/Hill_Valley_with_noise_Testing.data",
+      "bytes": 420871,
+      "sha256": "d7276840d9e4327f362269baca8af5e68ae1336052e57c95bde7b150669e4871",
+      "reason": "Exclude upstream noisy variant; future noise generation is a separate experiment step.",
+      "recovery": "Preserved in the external original/cleanup backups and original-upload Git history."
+    },
+    {
+      "original_path": "madelon/Dataset.pdf",
+      "bytes": 453565,
+      "sha256": "9a1752b81c45e1d2924d341269f0856a6530b74742c572353180708dacfa3d0b",
+      "reason": "Reference report, linked from README; not model input.",
+      "recovery": "Preserved in the external original/cleanup backups and original-upload Git history."
+    },
+    {
+      "original_path": "madelon/MADELON/madelon.param",
+      "bytes": 266,
+      "sha256": "c65bcf86fb79b284c2e628c0a8cf47b89f49aca14ca3a85e68f9f8a2f031f1b1",
+      "reason": "Original parameter summary; dimensions/class counts retained in validation metadata.",
+      "recovery": "Preserved in the external original/cleanup backups and original-upload Git history."
+    },
+    {
+      "original_path": "madelon/MADELON/madelon_test.data",
+      "bytes": 3601795,
+      "sha256": "93efc31148c850645520fbd8eae4422ac5e4861dc6454d2eceae7e93c1e2badb",
+      "reason": "Unlabeled test matrix excluded from supervised benchmarks.",
+      "recovery": "Preserved in the external original/cleanup backups and original-upload Git history."
     }
-  ]
+  ],
+  "excluded_metadata": [
+    "madelon/.DS_Store"
+  ],
+  "validation": {
+    "schema_version": 1,
+    "scope": "original_benchmark_validation",
+    "source_inventory_sha256": "a5ad17135f75b4461394f946649b6757156c49ce3d44381014f03e0d82f78cce",
+    "transformations": [],
+    "hardness_benchmark_started": false,
+    "sparsity_definition": "Fraction of X entries exactly zero, including implicit sparse zeros; missing and infinite entries are not counted as zeros.",
+    "integrity": {
+      "original_files": 10,
+      "verified_files": 10,
+      "errors": []
+    },
+    "summary": {
+      "dataset_groups": 6,
+      "partitions": 8,
+      "passed": 8,
+      "failed": 0
+    },
+    "status": "passed",
+    "partitions": [
+      {
+        "dataset": "basehock",
+        "partition": "pool",
+        "variant": null,
+        "source_format": "mat_v5",
+        "dtype_origin": "stored",
+        "source_files": [
+          {
+            "path": "BASEHOCK.mat",
+            "original_path": "BASEHOCK.mat",
+            "bytes": 279059,
+            "sha256": "e0452e0f3c0fefdc5cb6352165e4ba4a25c3a2a7b5a5b4d44e103742d6317aa0"
+          }
+        ],
+        "X": {
+          "shape": [
+            1993,
+            4862
+          ],
+          "dtype": "uint8",
+          "storage": "dense",
+          "entries": 9689966,
+          "missing_values": 0,
+          "infinite_values": 0,
+          "nonzero_values": 134253,
+          "zero_values": 9555713,
+          "sparsity": 0.9861451526248906,
+          "density": 0.01385484737510947,
+          "stored_sparse_entries": null
+        },
+        "y": {
+          "available": true,
+          "shape": [
+            1993
+          ],
+          "source_shape": [
+            1993,
+            1
+          ],
+          "dtype": "uint8",
+          "missing_values": 0,
+          "infinite_values": 0,
+          "class_counts": [
+            {
+              "label": 1,
+              "count": 994
+            },
+            {
+              "label": 2,
+              "count": 999
+            }
+          ]
+        },
+        "supervised_data_available": true,
+        "warnings": [
+          "No official split indices supplied; labels remain 1/2, not solver-ready -1/+1."
+        ],
+        "expected": {
+          "dataset": "basehock",
+          "partition": "pool",
+          "variant": null,
+          "shape": [
+            1993,
+            4862
+          ],
+          "X_dtype": "uint8",
+          "y_dtype": "uint8",
+          "class_counts": [
+            {
+              "label": 1,
+              "count": 994
+            },
+            {
+              "label": 2,
+              "count": 999
+            }
+          ],
+          "storage": "dense"
+        },
+        "errors": [],
+        "status": "passed"
+      },
+      {
+        "dataset": "colon",
+        "partition": "pool",
+        "variant": null,
+        "source_format": "libsvm_bzip2",
+        "dtype_origin": "parsed_float64",
+        "source_files": [
+          {
+            "path": "colon-cancer.bz2",
+            "original_path": "colon-cancer.bz2",
+            "bytes": 609480,
+            "sha256": "724d7291efb9a833b8407442a27f70f64beeb86c107d7b3ce98e8c48fe878867"
+          }
+        ],
+        "X": {
+          "shape": [
+            62,
+            2000
+          ],
+          "dtype": "float64",
+          "storage": "csr",
+          "entries": 124000,
+          "missing_values": 0,
+          "infinite_values": 0,
+          "nonzero_values": 124000,
+          "zero_values": 0,
+          "sparsity": 0.0,
+          "density": 1.0,
+          "stored_sparse_entries": 124000
+        },
+        "y": {
+          "available": true,
+          "shape": [
+            62
+          ],
+          "source_shape": [
+            62
+          ],
+          "dtype": "float64",
+          "missing_values": 0,
+          "infinite_values": 0,
+          "class_counts": [
+            {
+              "label": -1.0,
+              "count": 40
+            },
+            {
+              "label": 1.0,
+              "count": 22
+            }
+          ]
+        },
+        "supervised_data_available": true,
+        "warnings": [
+          "LIBSVM export is already normalized upstream; not raw for a train-only-scaling claim.",
+          "This loader is separate from the manuscript colon.csv loader."
+        ],
+        "expected": {
+          "dataset": "colon",
+          "partition": "pool",
+          "variant": null,
+          "shape": [
+            62,
+            2000
+          ],
+          "X_dtype": "float64",
+          "y_dtype": "float64",
+          "class_counts": [
+            {
+              "label": -1.0,
+              "count": 40
+            },
+            {
+              "label": 1.0,
+              "count": 22
+            }
+          ],
+          "storage": "csr"
+        },
+        "errors": [],
+        "status": "passed"
+      },
+      {
+        "dataset": "gina",
+        "partition": "pool",
+        "variant": null,
+        "source_format": "numpy_npz",
+        "dtype_origin": "stored",
+        "source_files": [
+          {
+            "path": "gina.npz",
+            "original_path": "gina.npz",
+            "bytes": 26919267,
+            "sha256": "ef4147ba955b5348966bcb92f6418491f3c5acea494c2ce41d3bb5afa6ced255"
+          }
+        ],
+        "X": {
+          "shape": [
+            3468,
+            970
+          ],
+          "dtype": "int64",
+          "storage": "dense",
+          "entries": 3363960,
+          "missing_values": 0,
+          "infinite_values": 0,
+          "nonzero_values": 1040997,
+          "zero_values": 2322963,
+          "sparsity": 0.6905441800734848,
+          "density": 0.30945581992651516,
+          "stored_sparse_entries": null
+        },
+        "y": {
+          "available": true,
+          "shape": [
+            3468
+          ],
+          "source_shape": [
+            3468
+          ],
+          "dtype": "object",
+          "missing_values": 0,
+          "infinite_values": 0,
+          "class_counts": [
+            {
+              "label": "-1",
+              "count": 1763
+            },
+            {
+              "label": "1",
+              "count": 1705
+            }
+          ]
+        },
+        "supervised_data_available": true,
+        "warnings": [
+          "OpenML export combines original train and validation; no split indices inferred.",
+          "Object labels remain strings '-1'/'1'; parsed as literals without executing pickle."
+        ],
+        "expected": {
+          "dataset": "gina",
+          "partition": "pool",
+          "variant": null,
+          "shape": [
+            3468,
+            970
+          ],
+          "X_dtype": "int64",
+          "y_dtype": "object",
+          "class_counts": [
+            {
+              "label": "-1",
+              "count": 1763
+            },
+            {
+              "label": "1",
+              "count": 1705
+            }
+          ],
+          "storage": "dense"
+        },
+        "errors": [],
+        "status": "passed"
+      },
+      {
+        "dataset": "hiva",
+        "partition": "pool",
+        "variant": null,
+        "source_format": "numpy_npz",
+        "dtype_origin": "stored",
+        "source_files": [
+          {
+            "path": "hiva.npz",
+            "original_path": "hiva.npz",
+            "bytes": 54715455,
+            "sha256": "f4d9b8a0e5797bbc54e66c713d0d8bb3d6a6cfe69b787c1a41f59cccbeb9a49c"
+          }
+        ],
+        "X": {
+          "shape": [
+            4229,
+            1617
+          ],
+          "dtype": "int64",
+          "storage": "dense",
+          "entries": 6838293,
+          "missing_values": 0,
+          "infinite_values": 0,
+          "nonzero_values": 621010,
+          "zero_values": 6217283,
+          "sparsity": 0.9091864007582009,
+          "density": 0.09081359924179909,
+          "stored_sparse_entries": null
+        },
+        "y": {
+          "available": true,
+          "shape": [
+            4229
+          ],
+          "source_shape": [
+            4229
+          ],
+          "dtype": "object",
+          "missing_values": 0,
+          "infinite_values": 0,
+          "class_counts": [
+            {
+              "label": "-1",
+              "count": 4080
+            },
+            {
+              "label": "1",
+              "count": 149
+            }
+          ]
+        },
+        "supervised_data_available": true,
+        "warnings": [
+          "OpenML export combines original train and validation; no split indices inferred.",
+          "Object labels remain strings '-1'/'1'; parsed as literals without executing pickle."
+        ],
+        "expected": {
+          "dataset": "hiva",
+          "partition": "pool",
+          "variant": null,
+          "shape": [
+            4229,
+            1617
+          ],
+          "X_dtype": "int64",
+          "y_dtype": "object",
+          "class_counts": [
+            {
+              "label": "-1",
+              "count": 4080
+            },
+            {
+              "label": "1",
+              "count": 149
+            }
+          ],
+          "storage": "dense"
+        },
+        "errors": [],
+        "status": "passed"
+      },
+      {
+        "dataset": "hill_valley",
+        "partition": "train",
+        "variant": "without_noise",
+        "source_format": "csv",
+        "dtype_origin": "parsed_float64",
+        "source_files": [
+          {
+            "path": "hill_valley/train.data",
+            "original_path": "hill+valley/Hill_Valley_without_noise_Training.data",
+            "bytes": 722695,
+            "sha256": "af232ff5258abeb5b1c61974648fd00bc0d37a545de33a2c3493692fc20330d5"
+          }
+        ],
+        "X": {
+          "shape": [
+            606,
+            100
+          ],
+          "dtype": "float64",
+          "storage": "dense",
+          "entries": 60600,
+          "missing_values": 0,
+          "infinite_values": 0,
+          "nonzero_values": 60600,
+          "zero_values": 0,
+          "sparsity": 0.0,
+          "density": 1.0,
+          "stored_sparse_entries": null
+        },
+        "y": {
+          "available": true,
+          "shape": [
+            606
+          ],
+          "source_shape": [
+            606
+          ],
+          "dtype": "float64",
+          "missing_values": 0,
+          "infinite_values": 0,
+          "class_counts": [
+            {
+              "label": 0.0,
+              "count": 305
+            },
+            {
+              "label": 1.0,
+              "count": 301
+            }
+          ]
+        },
+        "supervised_data_available": true,
+        "warnings": [
+          "Official partition preserved; labels remain 0/1, not solver-ready -1/+1.",
+          "Only the original without-noise variant is retained; no noise is generated by this loader."
+        ],
+        "expected": {
+          "dataset": "hill_valley",
+          "partition": "train",
+          "variant": "without_noise",
+          "shape": [
+            606,
+            100
+          ],
+          "X_dtype": "float64",
+          "y_dtype": "float64",
+          "class_counts": [
+            {
+              "label": 0.0,
+              "count": 305
+            },
+            {
+              "label": 1.0,
+              "count": 301
+            }
+          ],
+          "storage": "dense"
+        },
+        "errors": [],
+        "status": "passed"
+      },
+      {
+        "dataset": "hill_valley",
+        "partition": "test",
+        "variant": "without_noise",
+        "source_format": "csv",
+        "dtype_origin": "parsed_float64",
+        "source_files": [
+          {
+            "path": "hill_valley/test.data",
+            "original_path": "hill+valley/Hill_Valley_without_noise_Testing.data",
+            "bytes": 722774,
+            "sha256": "2d36201a54f6e8de6bd5dad99391c1a9754b95a3364c3461567795302882902f"
+          }
+        ],
+        "X": {
+          "shape": [
+            606,
+            100
+          ],
+          "dtype": "float64",
+          "storage": "dense",
+          "entries": 60600,
+          "missing_values": 0,
+          "infinite_values": 0,
+          "nonzero_values": 60600,
+          "zero_values": 0,
+          "sparsity": 0.0,
+          "density": 1.0,
+          "stored_sparse_entries": null
+        },
+        "y": {
+          "available": true,
+          "shape": [
+            606
+          ],
+          "source_shape": [
+            606
+          ],
+          "dtype": "float64",
+          "missing_values": 0,
+          "infinite_values": 0,
+          "class_counts": [
+            {
+              "label": 0.0,
+              "count": 295
+            },
+            {
+              "label": 1.0,
+              "count": 311
+            }
+          ]
+        },
+        "supervised_data_available": true,
+        "warnings": [
+          "Official partition preserved; labels remain 0/1, not solver-ready -1/+1.",
+          "Only the original without-noise variant is retained; no noise is generated by this loader."
+        ],
+        "expected": {
+          "dataset": "hill_valley",
+          "partition": "test",
+          "variant": "without_noise",
+          "shape": [
+            606,
+            100
+          ],
+          "X_dtype": "float64",
+          "y_dtype": "float64",
+          "class_counts": [
+            {
+              "label": 0.0,
+              "count": 295
+            },
+            {
+              "label": 1.0,
+              "count": 311
+            }
+          ],
+          "storage": "dense"
+        },
+        "errors": [],
+        "status": "passed"
+      },
+      {
+        "dataset": "madelon",
+        "partition": "train",
+        "variant": null,
+        "source_format": "whitespace_matrix",
+        "dtype_origin": "parsed_float64",
+        "source_files": [
+          {
+            "path": "madelon/train.data",
+            "original_path": "madelon/MADELON/madelon_train.data",
+            "bytes": 4001995,
+            "sha256": "0b6e37711efdc7ab74250c51e7d6966bffd9f8f2b0e9971e882c3a7a380c2314"
+          },
+          {
+            "path": "madelon/train.labels",
+            "original_path": "madelon/MADELON/madelon_train.labels",
+            "bytes": 5000,
+            "sha256": "10bffcc3b017467cb810d326b931951adcbde2b4870faf981da2991993b48689"
+          }
+        ],
+        "X": {
+          "shape": [
+            2000,
+            500
+          ],
+          "dtype": "float64",
+          "storage": "dense",
+          "entries": 1000000,
+          "missing_values": 0,
+          "infinite_values": 0,
+          "nonzero_values": 999999,
+          "zero_values": 1,
+          "sparsity": 1e-06,
+          "density": 0.999999,
+          "stored_sparse_entries": null
+        },
+        "y": {
+          "available": true,
+          "shape": [
+            2000
+          ],
+          "source_shape": [
+            2000
+          ],
+          "dtype": "float64",
+          "missing_values": 0,
+          "infinite_values": 0,
+          "class_counts": [
+            {
+              "label": -1.0,
+              "count": 1000
+            },
+            {
+              "label": 1.0,
+              "count": 1000
+            }
+          ]
+        },
+        "supervised_data_available": true,
+        "warnings": [
+          "Official labeled partition preserved; train/validation are not automatically merged."
+        ],
+        "expected": {
+          "dataset": "madelon",
+          "partition": "train",
+          "variant": null,
+          "shape": [
+            2000,
+            500
+          ],
+          "X_dtype": "float64",
+          "y_dtype": "float64",
+          "class_counts": [
+            {
+              "label": -1.0,
+              "count": 1000
+            },
+            {
+              "label": 1.0,
+              "count": 1000
+            }
+          ],
+          "storage": "dense"
+        },
+        "errors": [],
+        "status": "passed"
+      },
+      {
+        "dataset": "madelon",
+        "partition": "validation",
+        "variant": null,
+        "source_format": "whitespace_matrix",
+        "dtype_origin": "parsed_float64",
+        "source_files": [
+          {
+            "path": "madelon/valid.data",
+            "original_path": "madelon/MADELON/madelon_valid.data",
+            "bytes": 1200599,
+            "sha256": "cb9a46475147de1a58d9f15ef4c318e5b85de344e0f9ab92626fa446aa815dc9"
+          },
+          {
+            "path": "madelon/valid.labels",
+            "original_path": "madelon/madelon_valid.labels",
+            "bytes": 1500,
+            "sha256": "fbac32fa87fac41ab731994a1c824e7b25396069bff6df242c01fe240fcb34dc"
+          }
+        ],
+        "X": {
+          "shape": [
+            600,
+            500
+          ],
+          "dtype": "float64",
+          "storage": "dense",
+          "entries": 300000,
+          "missing_values": 0,
+          "infinite_values": 0,
+          "nonzero_values": 300000,
+          "zero_values": 0,
+          "sparsity": 0.0,
+          "density": 1.0,
+          "stored_sparse_entries": null
+        },
+        "y": {
+          "available": true,
+          "shape": [
+            600
+          ],
+          "source_shape": [
+            600
+          ],
+          "dtype": "float64",
+          "missing_values": 0,
+          "infinite_values": 0,
+          "class_counts": [
+            {
+              "label": -1.0,
+              "count": 300
+            },
+            {
+              "label": 1.0,
+              "count": 300
+            }
+          ]
+        },
+        "supervised_data_available": true,
+        "warnings": [
+          "Official labeled partition preserved; train/validation are not automatically merged."
+        ],
+        "expected": {
+          "dataset": "madelon",
+          "partition": "validation",
+          "variant": null,
+          "shape": [
+            600,
+            500
+          ],
+          "X_dtype": "float64",
+          "y_dtype": "float64",
+          "class_counts": [
+            {
+              "label": -1.0,
+              "count": 300
+            },
+            {
+              "label": 1.0,
+              "count": 300
+            }
+          ],
+          "storage": "dense"
+        },
+        "errors": [],
+        "status": "passed"
+      }
+    ],
+    "notes": [
+      "Validation preserves original labels; solver label adaptation is not implemented here.",
+      "Text files have no stored array dtype; parsed_float64 identifies the reader's numeric dtype.",
+      "BASEHOCK Y is exposed as a 1-D vector; its original (n, 1) shape is recorded.",
+      "Only Hill-Valley without_noise and labeled Madelon train/validation are retained.",
+      "No train/validation merging or new noise generation is performed by this audit.",
+      "Passing this audit does not resolve scientific configuration/author-confirmation gates."
+    ]
+  }
 }
