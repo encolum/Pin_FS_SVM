@@ -187,7 +187,7 @@ def update_dataset_validation(report: dict, *, data_root=None) -> Path:
     return path
 
 
-def write_validation_manifest(report: dict, output: str | Path, *, data_root=None, overwrite=False) -> Path:
+def write_validation_manifest(report: dict | list[dict], output: str | Path, *, data_root=None, overwrite=False) -> Path:
     """Save the separate report, never overwrite original inputs or their manifest."""
     root, inventory = original_inventory(data_root)
     path = Path(output).resolve()

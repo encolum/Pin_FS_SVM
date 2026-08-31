@@ -71,6 +71,45 @@ existing experiment configs have not been changed to silently substitute them.
 The LIBSVM Colon export is already normalized upstream and must not be represented
 as raw input for a strict train-only-preprocessing reproduction.
 
+### Solver-facing benchmark validation (Milestones 0–2)
+
+The separate [benchmark registry](configs/benchmark_registry.yaml) declares exact
+label mappings, partition policies, storage and **future** preprocessing policies.
+Validate its in-memory views without training or changing original files:
+
+```bash
+.venv/bin/python main.py validate-benchmarks --registry configs/benchmark_registry.yaml
+# Optional report; create artifacts_v2 first if it does not exist.
+.venv/bin/python main.py validate-benchmarks --output artifacts_v2/benchmark_validation.json
+```
+
+Reports require `--overwrite` to replace an existing file and cannot overwrite
+original inputs, their manifest or the selected registry. The raw
+`validate-datasets` command remains unchanged.
+
+```python
+from src.data import load_solver_ready_benchmark
+
+pool = load_solver_ready_benchmark("madelon", partition_policy="merge_labeled")
+official = load_solver_ready_benchmark("hill_valley", partition_policy="official_holdout")
+# official.X/y/sample_ids contain training rows only.
+# official.holdout.X/y/sample_ids contain the separate official test rows.
+```
+
+The API requires an explicit partition policy. `merge_labeled` uses train then
+test for Hill-Valley and train then validation for Madelon; `pool` is only for
+already-pooled sources. Stable IDs retain dataset, native partition and zero-based
+row index. Every load verifies source hashes and measured dimensions against the
+raw manifest before mapping labels to int64 `{-1, +1}`. BASEHOCK is stored dense
+in its original MAT file and is explicitly converted to CSR in memory; Colon
+stays CSR. Neither sparse input is implicitly densified.
+
+These views are **unscaled**: preprocessing is declared, not applied. They are not
+yet connected to VeraPin's experiment dispatch, and this milestone does not make
+the six-dataset experiment suite ready to run. See the
+[integration report](docs/benchmark_integration_m0_m2.md) for measured results,
+scope and remaining decisions.
+
 Calling `main.py` without a command displays the available commands. Every run
 prints its experiment matrix and estimated fit count before training.
 
