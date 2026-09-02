@@ -53,7 +53,7 @@ def solve_docplex(
         from docplex.mp.progress import ProgressClock, ProgressDataRecorder
     except ImportError as exc:
         raise RuntimeError(
-            "solver.backend='cplex' requires the optional packages in requirements-cplex.txt"
+            "solver.backend='cplex' requires the packages listed in requirements.txt"
         ) from exc
 
     c = np.asarray(linear_objective, dtype=float)

@@ -18,12 +18,6 @@ python -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 ```
 
-For DOcplex/CPLEX routes:
-
-```bash
-.venv/bin/python -m pip install -r requirements-cplex.txt
-```
-
 A full-size CPLEX license is still required for the intended benchmark models.
 The previously observed Community Edition limit must not be bypassed through
 unreported row or feature reduction.

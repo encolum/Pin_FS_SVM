@@ -1,3 +1,0 @@
--r requirements.txt
-docplex>=2.25,<3
-cplex>=22.1.1,<23
