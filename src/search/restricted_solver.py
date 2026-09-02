@@ -9,14 +9,14 @@ import numpy as np
 from scipy.optimize import Bounds, LinearConstraint, milp
 from scipy.sparse import lil_matrix, issparse
 
-from src.models.corrected.base import (
+from src.models.base import (
     SolverDiagnostics,
     scipy_status,
     validate_coefficient_bounds,
     validate_positive,
     validate_training_data,
 )
-from src.models.corrected.cplex_backend import solve_docplex, validate_backend
+from src.models.cplex_backend import solve_docplex, validate_backend
 
 from .mip_start import MIPStartData
 from .progress import SolverProgressRecord, validate_progress_trajectory

@@ -19,8 +19,8 @@ result directory and no file under `dataset/` was deleted or changed.
 - VeraPin preparation, selection, readiness gates and orchestration;
 - all VeraPin/hardness/Static-KS configs, documentation and active tests.
 
-`src/models/corrected/` keeps its existing name to avoid an unrelated import-path
-migration. Only legacy baseline files inside it were removed.
+The retained implementations were moved from `src/models/corrected/` directly
+into `src/models/`, matching the requested final structure.
 
 ## Removed from main
 
@@ -54,8 +54,6 @@ Legacy-only tests:
 
 The old CLI commands `validate`, `pilot`, `run`, `sensitivity`, `ablation`,
 `statistics`, `analyze` and `plot` were removed with their implementation.
-Unused direct dependencies `statsmodels` and `matplotlib` were also removed.
-
 ## Required refactors completed first
 
 - General config loading moved to `src/utils/config.py`.
@@ -63,6 +61,7 @@ Unused direct dependencies `statsmodels` and `matplotlib` were also removed.
   `src/experiments/selection.py`.
 - VeraPin accepts only `kind: benchmark` and `kind: synthetic`; its legacy
   manuscript-loader branch was removed.
+- Retained model files were moved from `src/models/corrected/` to `src/models/`.
 - Package exports, active tests and documentation were updated before validation.
 
 ## Post-cleanup verification

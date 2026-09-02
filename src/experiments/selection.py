@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 
 
-def selection_tie_key(
+def _selection_tie_key(
     parameters: dict[str, Any], mean_selected_features: float
 ) -> tuple[Any, ...]:
     """Prefer sparsity, then smaller B, then deterministic parameter order."""

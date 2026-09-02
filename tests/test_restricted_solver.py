@@ -3,7 +3,7 @@ from time import perf_counter
 import numpy as np
 import pytest
 
-from src.models.corrected.pin_fs_svm import PinFSSVM
+from src.models.pin_fs_svm import PinFSSVM
 from src.search import build_pin_fs_problem, solve_restricted_pin_fs
 
 

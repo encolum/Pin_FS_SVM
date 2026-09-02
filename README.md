@@ -200,7 +200,7 @@ dataset/                        original uploads, provenance and checksums
 src/data/                       benchmark adapters, preprocessing, corruption
 src/evaluation/                 classification metrics and feature stability
 src/experiments/                preparation, tie-break, gates and orchestration
-src/models/corrected/           retained Pin/L1/MILP model implementations
+src/models/                     retained Pin/L1/MILP model implementations
 src/reporting/                  route tables and solver profiles
 src/search/                     restricted solver and shared kernel engine
 src/search/policies/            Static KS, Handcrafted ADKS and frozen VeraPin

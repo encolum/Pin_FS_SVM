@@ -4,7 +4,7 @@ import pytest
 pytest.importorskip("docplex")
 pytest.importorskip("cplex")
 
-from src.models.corrected.pin_fs_svm import PinFSSVM
+from src.models.pin_fs_svm import PinFSSVM
 
 
 def test_cplex_pin_fs_backend_matches_formulation_on_small_instance():

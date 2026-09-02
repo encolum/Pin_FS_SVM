@@ -15,10 +15,10 @@ from src.utils.matrices import guarded_dense, update_array_hash
 from scipy.optimize import Bounds, LinearConstraint, milp
 from sklearn.feature_selection import mutual_info_classif
 
-from src.models.corrected.base import scipy_status, validate_training_data
-from src.models.corrected.cplex_backend import solve_docplex, validate_backend
-from src.models.corrected.l1_svm import L1SVM
-from src.models.corrected.pin_svm import PinSVM
+from src.models.base import scipy_status, validate_training_data
+from src.models.cplex_backend import solve_docplex, validate_backend
+from src.models.l1_svm import L1SVM
+from src.models.pin_svm import PinSVM
 
 from .restricted_solver import build_pin_fs_problem
 from .states import FeatureState, RestrictedSolveResult

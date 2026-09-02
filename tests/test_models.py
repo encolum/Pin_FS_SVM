@@ -1,11 +1,11 @@
 import numpy as np
 import pytest
 
-from src.models.corrected.base import SolverDiagnostics
-from src.models.corrected.budgeted_milp_svm import BudgetedMILPSVM
-from src.models.corrected.l1_svm import L1SVM
-from src.models.corrected.pin_fs_svm import PinFSSVM
-from src.models.corrected.pin_svm import PinSVM
+from src.models.base import SolverDiagnostics
+from src.models.budgeted_milp_svm import BudgetedMILPSVM
+from src.models.l1_svm import L1SVM
+from src.models.pin_fs_svm import PinFSSVM
+from src.models.pin_svm import PinSVM
 
 
 def test_free_coefficient_can_be_negative():

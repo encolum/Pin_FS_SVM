@@ -11,7 +11,7 @@ from scipy.sparse import csr_matrix
 from .progress import SolverProgressRecord
 
 if TYPE_CHECKING:
-    from src.models.corrected.base import SolverDiagnostics
+    from src.models.base import SolverDiagnostics
 
 
 @dataclass

@@ -8,7 +8,7 @@ from time import perf_counter
 from typing import Any
 
 import numpy as np
-from src.models.corrected.base import validate_training_data
+from src.models.base import validate_training_data
 
 from .mip_start import result_to_mip_start
 from .policies.base import KernelPolicy

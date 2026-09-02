@@ -10,7 +10,7 @@ from scipy import sparse
 from sklearn.utils.sparsefuncs import mean_variance_axis
 from src.utils.matrices import data_hash, numeric_matrix
 
-from src.models.corrected.l1_svm import L1SVM
+from src.models.l1_svm import L1SVM
 
 
 @dataclass

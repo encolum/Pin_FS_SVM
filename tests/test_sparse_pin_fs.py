@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 from scipy import sparse
-from src.models.corrected.base import validate_training_data
-from src.models.corrected.pin_fs_svm import PinFSSVM
+from src.models.base import validate_training_data
+from src.models.pin_fs_svm import PinFSSVM
 from src.search.restricted_solver import build_pin_fs_problem, solve_restricted_pin_fs
 from src.search.kernel_engine import run_kernel_search
 from src.search.policies.static_ks import StaticKSPolicy
