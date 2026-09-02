@@ -201,8 +201,8 @@ src/utils/                      config, matrix, seed and serialization helpers
 tests/                          active-pipeline regression tests
 ```
 
-Generated results and validation reports remain ignored under `results_verapin/`,
-`artifacts_verapin/` and `artifacts_v2/`.
+Generated results and validation reports remain ignored under `results_verapin/`
+and `artifacts_verapin/`.
 
 ## Verification
 

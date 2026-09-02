@@ -1,25 +1,23 @@
-*.pyc
+# Python environments, caches, and tooling
 __pycache__/
-.DS_Store
-detailed_metrics/
+*.py[cod]
 .venv/
 .pytest_cache/
-# External manuscript inputs; original uploads in lowercase dataset/ are versioned.
-/Dataset/Dataset/
-/data/
-results_v2/
-artifacts_v2/
-logs_v2/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local secrets and editor/OS state
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/
+
+# Active experiment outputs
 results_verapin/
 artifacts_verapin/
 tmp/
 *.log
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.svg
-*.pdf
-*.xlsx
-*.xls
-*.ipynb
