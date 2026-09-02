@@ -138,8 +138,8 @@ Obtain a suitable CPLEX license and decide version parity; approve bounds,
 hyperparameter grids, seeds, solver budgets, preprocessing overrides and any
 corruption profiles; identify at least two genuinely hard instances; review/freeze
 ADKS and the final method; choose/authorize any LLM provider and offline budget.
-See `AUTHOR_DECISIONS_REQUIRED.md`. The implementation does not make these author
-decisions on the user's behalf.
+The implementation does not make these scientific decisions on the user's behalf;
+unresolved values remain explicit in the active configurations.
 
 Generated verification reports remain in ignored `artifacts_v2/`; dataset source
 files and their original manifest remain untouched. The README documents the

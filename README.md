@@ -102,8 +102,8 @@ the provisional settings and installing an adequate CPLEX license:
 ```
 
 Continue with other IDs separately. Do not launch ADKS/evolution/final runs
-until the gates in [AUTHOR_DECISIONS_REQUIRED.md](AUTHOR_DECISIONS_REQUIRED.md)
-are resolved.
+until every unresolved `null` gate and provisional setting in the selected
+configuration has been reviewed and resolved.
 
 Core workflow commands are:
 

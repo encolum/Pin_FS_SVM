@@ -99,8 +99,8 @@ Before later integration/runs:
 - Keep Colon's upstream normalization caveat; do not claim it was raw input to a
   train-only preprocessing protocol.
 - Decide sparse preprocessing/memory limits before integrating solver support.
-- Resolve corruption/evolution settings separately, as tracked in
-  `AUTHOR_DECISIONS_REQUIRED.md`; no scientific values were guessed here.
+- Resolve corruption/evolution settings separately in the active configurations;
+  no scientific values were guessed here.
 
 Reproduce the checks using the project's Python environment:
 
