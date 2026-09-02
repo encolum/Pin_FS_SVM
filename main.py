@@ -29,13 +29,9 @@ def build_parser() -> argparse.ArgumentParser:
     benchmarks.add_argument("--output", help="export a separate JSON validation report")
     benchmarks.add_argument("--overwrite", action="store_true", help="replace an existing validation report")
 
-    for command, default in (
-        ("hardness", "configs/hardness.yaml"),
-        ("kernel-search", "configs/static_ks_pilot.yaml"),
-        ("adks", "configs/adks_pilot.yaml"),
-    ):
+    for command in ("hardness", "adks"):
         sub = subparsers.add_parser(command)
-        sub.add_argument("--config", default=default)
+        sub.add_argument("--config", required=True)
         sub.add_argument("--instance", action="append", help="run only the named instance (repeatable)")
         sub.add_argument("--validate-only", action="store_true", help="validate config without creating a run or solving")
 
@@ -136,7 +132,6 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command in {
         "hardness",
-        "kernel-search",
         "adks",
         "evolve-verapin",
         "evaluate-verapin",
@@ -144,7 +139,6 @@ def main(argv: list[str] | None = None) -> int:
         from src.experiments.verapin import (
             run_adks,
             run_hardness_benchmark,
-            run_static_kernel_search,
             run_verapin_evolution,
             run_verapin_final,
             validate_verapin_config,
@@ -176,8 +170,6 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.flush()
         if args.command == "hardness":
             output = run_hardness_benchmark(config)
-        elif args.command == "kernel-search":
-            output = run_static_kernel_search(config)
         elif args.command == "adks":
             output = run_adks(config)
         elif args.command == "evolve-verapin":

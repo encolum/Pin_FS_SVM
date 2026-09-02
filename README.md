@@ -3,7 +3,6 @@
 This repository contains the active implementation for:
 
 - the paper-aligned Pin-FS-SVM formulation;
-- Static Kernel Search;
 - Handcrafted Adaptive Kernel Search (ADKS);
 - VeraPin-KS policy evolution and frozen-policy evaluation.
 
@@ -74,7 +73,6 @@ The CLI exposes only the active pipeline:
 validate-datasets
 validate-benchmarks
 hardness
-kernel-search
 adks
 evolve-verapin
 evaluate-verapin
@@ -109,11 +107,11 @@ Core workflow commands are:
 
 ```bash
 # Cold full Pin-FS hardness profiling
-.venv/bin/python main.py hardness --config configs/hardness.yaml
+.venv/bin/python main.py hardness \
+  --config configs/hardness_real_pilot.yaml --instance hill-valley-clean
 
-# Static KS and Handcrafted ADKS
-.venv/bin/python main.py kernel-search --config configs/static_ks_pilot.yaml
-.venv/bin/python main.py adks --config configs/adks_pilot.yaml
+# Handcrafted ADKS
+.venv/bin/python main.py adks --config configs/adks_real_pilot.yaml
 
 # Train-only evolution, validation-only policy freezing, and offline replay
 .venv/bin/python main.py evolve-verapin --config configs/verapin_evolution.yaml
@@ -195,7 +193,7 @@ not call an LLM.
 
 ```text
 main.py                         active command-line interface
-configs/                        VeraPin, hardness, Static-KS and registry configs
+configs/                        VeraPin, hardness, ADKS and registry configs
 dataset/                        original uploads, provenance and checksums
 src/data/                       benchmark adapters, preprocessing, corruption
 src/evaluation/                 classification metrics and feature stability
@@ -203,7 +201,7 @@ src/experiments/                preparation, tie-break, gates and orchestration
 src/models/                     retained Pin/L1/MILP model implementations
 src/reporting/                  route tables and solver profiles
 src/search/                     restricted solver and shared kernel engine
-src/search/policies/            Static KS, Handcrafted ADKS and frozen VeraPin
+src/search/policies/            Static KS debug policy, ADKS and frozen VeraPin
 src/search/llm_evolution/       safe policy DSL, evaluation, cache and evolution
 src/utils/                      config, matrix, seed and serialization helpers
 tests/                          active-pipeline regression tests
