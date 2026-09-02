@@ -10,7 +10,7 @@ This repository contains the active implementation for:
 The former manuscript-reproduction pipeline has been removed from `main` to
 avoid maintaining two conflicting experiment paths. Its complete source remains
 recoverable from branch `archive/manuscript-v2` and tag
-`pre-verapin-cleanup`. See [the cleanup inventory](docs/main_cleanup.md).
+`pre-verapin-cleanup`.
 
 ## Setup
 
@@ -209,8 +209,6 @@ src/utils/                      config, matrix, seed and serialization helpers
 tests/                          active-pipeline regression tests
 ```
 
-Detailed implementation evidence is retained in
-[docs/benchmark_integration_full.md](docs/benchmark_integration_full.md).
 Generated results and validation reports remain ignored under `results_verapin/`,
 `artifacts_verapin/` and `artifacts_v2/`.
 
