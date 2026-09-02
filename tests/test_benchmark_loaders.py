@@ -36,11 +36,8 @@ def audit():
     return report
 
 
-def test_six_loaders_separate_from_manuscript():
-    from src.data.loaders import DATASET_SPECS
-
+def test_exact_six_retained_benchmark_loaders():
     assert set(BENCHMARK_LOADERS) == {"basehock", "colon", "gina", "hiva", "hill_valley", "madelon"}
-    assert set(DATASET_SPECS) == {"diabetes", "cleveland", "wdbc", "ionosphere", "sonar", "colon"}
 
 
 @pytest.mark.parametrize("index", range(8))
@@ -321,7 +318,6 @@ def test_cli_inspection_is_read_only_and_never_runs_hardness(monkeypatch, capsys
     def forbidden(*args, **kwargs):
         pytest.fail("data validation must not train or write a report by default")
 
-    monkeypatch.setattr(main, "run_experiment", forbidden)
     monkeypatch.setattr(verapin, "run_hardness_benchmark", forbidden)
     from src.data import benchmark_validation
     monkeypatch.setattr(benchmark_validation, "write_validation_manifest", forbidden)

@@ -1,1 +1,1 @@
-"""Shared v2 utilities; legacy utility modules remain available."""
+"""Shared configuration, matrix, seed, and serialization utilities."""

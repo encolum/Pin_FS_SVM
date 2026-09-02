@@ -1,8 +1,0 @@
-{
-  "diabetes": {"samples": 768, "features": 8, "positive": 268, "negative": 500},
-  "cleveland": {"samples": 303, "features": 13, "positive": 139, "negative": 164},
-  "wdbc": {"samples": 569, "features": 30, "positive": 212, "negative": 357},
-  "ionosphere": {"samples": 351, "features": 34, "positive": 225, "negative": 126},
-  "sonar": {"samples": 208, "features": 60, "positive": 111, "negative": 97},
-  "colon": {"samples": 62, "features": 2000, "positive": 22, "negative": 40}
-}

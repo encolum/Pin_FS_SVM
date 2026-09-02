@@ -1,1 +1,1 @@
-"""Aggregation, tables, and plotting for v2 machine-readable results."""
+"""Machine-readable VeraPin route results and solver profiles."""

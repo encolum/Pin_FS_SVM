@@ -17,7 +17,6 @@ def test_cli_real_six_benchmarks_no_experiment(tmp_path, capsys, monkeypatch):
 
     def forbidden(*args, **kwargs):
         raise AssertionError("validation must not train, evolve, or fit preprocessing")
-    monkeypatch.setattr(main, "run_experiment", forbidden)
     for name in ("run_hardness_benchmark", "run_static_kernel_search", "run_adks",
                  "run_verapin_evolution", "run_verapin_final"):
         monkeypatch.setattr(verapin, name, forbidden)

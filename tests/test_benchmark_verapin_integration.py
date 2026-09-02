@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from scipy import sparse
 
-from src.experiments.config import load_config
+from src.utils.config import load_config
 from src.experiments.verapin import _policy_instances, validate_verapin_config
 from src.experiments import benchmark_instances as preparation
 from src.experiments.readiness import check_execution_readiness

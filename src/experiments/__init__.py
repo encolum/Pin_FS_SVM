@@ -1,1 +1,1 @@
-"""Configuration-first v2 experiment orchestration."""
+"""VeraPin experiment preparation, selection, readiness, and orchestration."""

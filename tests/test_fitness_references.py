@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from src.experiments.config import load_config
+from src.utils.config import load_config
 from src.experiments.verapin import _engine_config
 from src.search.llm_evolution.evaluator import PolicyInstance
 from src.search.llm_evolution import references

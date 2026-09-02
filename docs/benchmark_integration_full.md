@@ -18,8 +18,8 @@ full-size pilot evidence are separate and are not claimed complete.
   carry reasons. Budget checks are made between work units; online signal and
   solver model-build costs are included. Optional SciPy Pin signals are skipped
   in timed routes because SLSQP lacks an enforceable wall-clock limit.
-- **Instance integration:** `kind: benchmark` uses verified original loaders;
-  `dataset`/`legacy_dataset` retain the separate manuscript path. Source policy,
+- **Instance integration:** `kind: benchmark` uses verified original loaders.
+  The legacy manuscript path is preserved only in the pre-cleanup archive. Source policy,
   research split and outer fold have separate metadata. All six benchmarks can
   become `PolicyInstance`s without calling a solver. Official holdout never
   enters fitting/tuning. Source hashes, labels, stable IDs and preprocessing
@@ -90,8 +90,8 @@ Full-suite checks cover dense/CSR equivalence
 with SciPy and CPLEX, all six real adapters, safe preprocessing, blocked
 densification, sparse signal equivalence, nested fold isolation, deterministic
 corruption, research-group separation and three-route end-to-end final QA.
-The three legacy manuscript-data tests remain skipped because their external
-files are absent; retained-benchmark tests are not skipped.
+Those historical counts included three skipped legacy manuscript-data tests.
+The active main branch no longer contains that legacy suite.
 
 A real local CPLEX **software pilot**, not a paper benchmark, ran on a clean
 40-observation / 20-feature synthetic instance, with provisional `B=5`, `C=1`,
@@ -144,3 +144,12 @@ decisions on the user's behalf.
 Generated verification reports remain in ignored `artifacts_v2/`; dataset source
 files and their original manifest remain untouched. The README documents the
 exact validation and sequential-pilot commands.
+
+## Main cleanup (2026-09-02)
+
+The duplicate manuscript-reproduction pipeline was removed from active `main`
+after being backed up at commit `2b1a72b9ee22862cd8b336c6468139b686e371c6`
+in branch `archive/manuscript-v2` and tag `pre-verapin-cleanup`. Pin-FS-SVM,
+Static KS, Handcrafted ADKS, VeraPin-KS, all retained benchmark inputs and all
+implementation evidence remain. See `docs/main_cleanup.md` for the exact
+kept/removed inventory and post-cleanup verification.

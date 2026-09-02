@@ -1,5 +1,9 @@
 # Benchmark integration: Milestones 0–2
 
+> Historical milestone report. The duplicate manuscript pipeline described as
+> retained at this stage was later archived and removed from active `main` on
+> 2026-09-02. See `docs/main_cleanup.md`.
+
 Implemented against the supplied VeraPin Benchmark Integration Technical
 Specification and Implementation Plan. The plan's section 18 explicitly limits
 the immediate work to Milestones 0–2; the technical specification's section 21

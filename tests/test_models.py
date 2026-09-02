@@ -3,9 +3,7 @@ import pytest
 
 from src.models.corrected.base import SolverDiagnostics
 from src.models.corrected.budgeted_milp_svm import BudgetedMILPSVM
-from src.models.corrected.fisher_l1_svm import FisherL1SVM
 from src.models.corrected.l1_svm import L1SVM
-from src.models.corrected.l1_svm_rfe import L1SVMRFE
 from src.models.corrected.pin_fs_svm import PinFSSVM
 from src.models.corrected.pin_svm import PinSVM
 
@@ -61,9 +59,3 @@ def test_budgeted_milp_has_no_C_or_z_term():
     model = BudgetedMILPSVM(B=1, lower_bound=-2, upper_bound=2)
     assert model.C is None
     assert not hasattr(model, "z_")
-
-
-@pytest.mark.parametrize("model", [FisherL1SVM(), L1SVMRFE(target_features=1)])
-def test_feature_selecting_baselines_use_manuscript_coefficient_threshold(model):
-    model.w_ = np.array([1e-3, 1.001e-3, -2e-3, 0.0])
-    assert model.get_selected_features() == [1, 2]

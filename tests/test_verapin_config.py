@@ -2,7 +2,7 @@ import copy
 
 import pytest
 
-from src.experiments.config import load_config
+from src.utils.config import load_config
 from src.experiments.verapin import validate_verapin_config
 
 
@@ -64,3 +64,11 @@ def test_final_config_keeps_outer_classification_choices_author_gated():
     assert config["classification"]["inner_folds"] == 3
     assert "classification.parameter_grid" in str(error.value)
     assert "classification.outer_seed" in str(error.value)
+
+
+@pytest.mark.parametrize("kind", ["dataset", "legacy_dataset"])
+def test_legacy_manuscript_instance_kinds_are_rejected(kind):
+    config = load_config("configs/hardness_real_pilot.yaml")
+    config["instances"][0]["kind"] = kind
+    with pytest.raises(ValueError, match="must be synthetic or benchmark"):
+        validate_verapin_config(config, command="hardness")

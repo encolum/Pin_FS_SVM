@@ -12,7 +12,6 @@ import numpy as np
 from sklearn.model_selection import StratifiedKFold
 
 from src.data.synthetic import generate_synthetic_instance, save_synthetic_instance
-from src.data.loaders import load_dataset
 from src.data.preprocessing import fit_transform_training
 from src.evaluation.metrics import classification_metrics
 from src.reporting.kernel_search_tables import (
@@ -78,8 +77,8 @@ def validate_verapin_config(config: dict[str, Any], *, command: str) -> None:
         if not isinstance(instance, dict):
             raise ValueError(f"instances[{index}] must be a mapping")
         kind = instance.get("kind", "synthetic")
-        if kind not in {"synthetic", "dataset", "legacy_dataset", "benchmark"}:
-            raise ValueError(f"instances[{index}].kind must be synthetic, benchmark, or legacy_dataset")
+        if kind not in {"synthetic", "benchmark"}:
+            raise ValueError(f"instances[{index}].kind must be synthetic or benchmark")
         split_field = "research_split" if "research_split" in instance else "split"
         required = (
             {"id", split_field, *(CLEAN_SYNTHETIC_FIELDS if instance.get("generation") == "clean" else _SYNTHETIC_FIELDS)}
@@ -760,46 +759,16 @@ def _policy_instances(
                 run_dir=run_dir, outer_evaluation=outer_evaluation))
             continue
         specification = {**specification, "split": research_split(specification)}
-        if specification.get("kind", "synthetic") in {"dataset", "legacy_dataset"}:
-            raw_X, y = load_dataset(
-                str(specification["dataset"]),
-                str(specification["condition"]),
-                data_root=specification.get("data_root"),
-                validate_classes=specification.get("condition") == "clean",
-            )
-            feature_budget = int(specification["feature_budget"])
-            if feature_budget < 1 or feature_budget > raw_X.shape[1]:
-                raise ValueError(
-                    f"instance {specification['id']} has invalid feature_budget={feature_budget}"
-                )
-            source_metadata = {
-                "instance_id": specification["id"],
-                "kind": "dataset",
-                "dataset": specification["dataset"],
-                "condition": specification["condition"],
-                "split": specification["split"],
-                "shape": list(raw_X.shape),
-                "feature_budget": feature_budget,
-            }
-            write_json(
-                run_dir / "instances" / f"{specification['id']}.json",
-                source_metadata,
-            )
-        else:
-            generated = generate_synthetic_instance(
-                **{name: specification[name] for name in _SYNTHETIC_FIELDS},
-                split=str(specification["split"]),
-            )
-            save_synthetic_instance(
-                generated,
-                run_dir / "instances",
-                instance_id=str(specification["id"]),
-            )
-            raw_X, y, feature_budget = (
-                generated.X,
-                generated.y,
-                generated.feature_budget,
-            )
+        generated = generate_synthetic_instance(
+            **{name: specification[name] for name in _SYNTHETIC_FIELDS},
+            split=str(specification["split"]),
+        )
+        save_synthetic_instance(
+            generated,
+            run_dir / "instances",
+            instance_id=str(specification["id"]),
+        )
+        raw_X, y, feature_budget = generated.X, generated.y, generated.feature_budget
         if outer_evaluation:
             result.extend(
                 _outer_fold_instances(
@@ -814,14 +783,11 @@ def _policy_instances(
                 )
             )
         else:
-            X = raw_X
-            if specification.get("kind", "synthetic") in {"dataset", "legacy_dataset"}:
-                X, _, _ = fit_transform_training(raw_X)
             result.append(
                 PolicyInstance(
                     instance_id=str(specification["id"]),
                     split=str(specification["split"]),
-                    X=X,
+                    X=raw_X,
                     y=y,
                     B=feature_budget,
                     C=float(problem["C"]),

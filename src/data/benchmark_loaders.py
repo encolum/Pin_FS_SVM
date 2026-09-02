@@ -1,4 +1,4 @@
-"""Six read-only loaders for original uploads, separate from manuscript loaders.
+"""Six read-only loaders for the retained original benchmark uploads.
 
 Files are hash-checked before parsing. No scaling, label mapping, feature
 selection, split merging, casting of stored arrays, or file writes occur here.

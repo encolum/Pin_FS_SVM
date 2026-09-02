@@ -4,10 +4,9 @@ The corrected code must not guess the following manuscript-level choices.
 
 ## Coefficient bounds
 
-The manuscript requires valid bounds `l_j < 0 < u_j` and says that the
-experimental values are reported, but it does not give numeric values. The pilot
-configuration preserves the legacy `[-2, 2]` assumption only for software QA.
-Confirm or replace these bounds before treating any run as a manuscript result.
+The formulation requires valid bounds `l_j < 0 < u_j`, but the manuscript does
+not give numeric values. Confirm the bounds used by each active VeraPin config
+before treating any run as a paper result.
 
 ## Perturbation generation
 
@@ -20,9 +19,8 @@ Confirm every value used by the generated-data protocol:
 - reference L1-SVM `C`;
 - number of independent corruption seeds.
 
-The manuscript reports one archived processed file per dataset and condition. A
-new generated-data study is a corrected extension, not an exact numerical
-reproduction of those archived variants.
+A generated-data study is a corrected extension, not an exact numerical
+reproduction of archived manuscript variants.
 
 ## Solver parity
 
@@ -30,17 +28,11 @@ The manuscript reports DOcplex with IBM ILOG CPLEX 22.1.1 and one CPLEX thread
 for Pin-SVM, Pin-FS-SVM, and Budgeted MILP-SVM. Confirm the licensed CPLEX
 runtime and whether strict 22.1.1 parity is required before the scientific pilot.
 
-## Statistical reporting
-
-The Wilcoxon/BH implementation is exploratory. Confirm the final pairing unit,
-correction family, alternative hypothesis, and whether inferential results will
-appear in the manuscript.
-
 ## Execution gate
 
 Do not mark `coefficient_bounds.author_confirmed` as true, fill the full
-corruption profiles, or launch `main.py run --confirm-full-run` until the choices
-above have been reviewed by an author.
+corruption profiles, or launch hardness/ADKS/evolution/final experiments until
+the choices above have been reviewed by an author.
 
 ## VeraPin-KS scientific configuration
 
@@ -100,5 +92,5 @@ Before scientific execution, review:
 
 Real benchmarks are excluded from evolution by default. Any explicit override
 is recorded, and overlapping source observations across research groups are
-rejected. `kind: dataset` remains a legacy alias; prefer `legacy_dataset` for
-archived manuscript input and `benchmark` for the six new datasets.
+rejected. Active configs must use `kind: benchmark` for the six retained datasets
+or `kind: synthetic`; legacy manuscript kinds are available only from the archive.

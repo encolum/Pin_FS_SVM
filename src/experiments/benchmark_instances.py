@@ -16,7 +16,7 @@ from src.data.corruptions import apply_corruption, array_hash, validate_corrupti
 from src.data.preprocessing import fit_preprocessor, transform_partition
 from src.data.synthetic import generate_clean_synthetic_instance, save_synthetic_instance
 from src.evaluation.metrics import classification_metrics
-from src.evaluation.nested_cv import _selection_tie_key
+from src.experiments.selection import selection_tie_key
 from src.search.llm_evolution.evaluator import PolicyInstance
 from src.search.restricted_solver import solve_restricted_pin_fs
 from src.utils.matrices import matrix_metadata
@@ -128,8 +128,8 @@ def select_inner_parameters(X_train, y_train, *, classification, preprocessing, 
         score, best_score = row["mean_balanced_accuracy"], best["mean_balanced_accuracy"]
         if score > best_score + selection_tolerance or (
             abs(score - best_score) <= selection_tolerance
-            and _selection_tie_key(row["parameters"], row["mean_selected_feature_count"])
-            < _selection_tie_key(best["parameters"], best["mean_selected_feature_count"])
+            and selection_tie_key(row["parameters"], row["mean_selected_feature_count"])
+            < selection_tie_key(best["parameters"], best["mean_selected_feature_count"])
         ):
             best = row
     return best["parameters"], {"selection": "inner_balanced_accuracy", "test_data_used": False,

@@ -1,277 +1,175 @@
-# Pin-FS-SVM: corrected paper-aligned implementation
+# Pin-FS-SVM and VeraPin-KS
 
-This repository contains the refactored experimental pipeline for the Pin-FS-SVM
-manuscript. The executable implementation is centered on `main.py`, the corrected
-models in `src/models/corrected/`, and the experiment definitions in `configs/`.
+This repository contains the active implementation for:
 
-The checkout preserves the selected original benchmark inputs under `dataset/`, with
-provenance, checksums, and explicit partitions in [dataset/README.md](dataset/README.md).
-The original manuscript data under `Dataset/Dataset/`, local environments,
-generated results, plots, reports, and logs remain excluded from version control.
+- the paper-aligned Pin-FS-SVM formulation;
+- Static Kernel Search;
+- Handcrafted Adaptive Kernel Search (ADKS);
+- VeraPin-KS policy evolution and frozen-policy evaluation.
 
-The mathematical formulations follow the manuscript, while the evaluation protocol
-uses the corrected Phase 1 design: nested stratified cross-validation, clean
-train-only scaling, then partition-local corruption of standardized training data.
-This intentionally improves on the manuscript's non-nested evaluation and does not
-claim numerical reproduction of its archived tables.
+The former manuscript-reproduction pipeline has been removed from `main` to
+avoid maintaining two conflicting experiment paths. Its complete source remains
+recoverable from branch `archive/manuscript-v2` and tag
+`pre-verapin-cleanup`. See [the cleanup inventory](docs/main_cleanup.md).
 
-The paper does not provide numeric coefficient bounds or complete corruption rates
-and distributions. Full, sensitivity, and ablation runs remain guarded until those
-values are confirmed in `AUTHOR_DECISIONS_REQUIRED.md`. The pilot defaults to
-SciPy/HiGHS for portable software QA. Full, sensitivity, and ablation configurations
-use the optional DOcplex/CPLEX backend with one solver thread, matching the
-manuscript's reported solver family.
-
-## Quick start
+## Setup
 
 ```bash
 python -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 ```
 
-For manuscript-level solver parity, install the optional CPLEX environment and
-ensure that the local IBM license permits the planned model sizes:
+For DOcplex/CPLEX routes:
 
 ```bash
 .venv/bin/python -m pip install -r requirements-cplex.txt
 ```
 
-Restore the manuscript dataset files under `Dataset/Dataset/` using the names
-declared in `src/data/loaders.py`. Then validate and run the pilot:
+A full-size CPLEX license is still required for the intended benchmark models.
+The previously observed Community Edition limit must not be bypassed through
+unreported row or feature reduction.
+
+## Retained benchmark data
+
+`dataset/` contains the original selected uploads, their provenance and SHA-256
+checksums. No loader rewrites these files. Hill-Valley retains the original
+without-noise train/test partitions; Madelon retains labeled train/validation;
+BASEHOCK, Colon, GINA and HIVA retain their supplied pooled source.
+
+Run both read-only audits before any experiment:
 
 ```bash
-.venv/bin/python main.py validate --config configs/pilot.yaml
-.venv/bin/python main.py pilot --config configs/pilot.yaml
-```
-
-The retained benchmarks have unchanged original formats, labels and values; only
-paths are simplified. Hill-Valley keeps only without-noise train/test, and Madelon
-keeps labeled train/validation separately. Six read-only loaders inspect
-these inputs without preprocessing or rewriting them. Verify byte integrity
-or inspect actual shapes, dtypes, class counts, missing values, and sparsity:
-
-```bash
-.venv/bin/python -m pytest tests/test_dataset_originals.py -q
 .venv/bin/python main.py validate-datasets
+.venv/bin/python main.py validate-benchmarks \
+  --registry configs/benchmark_registry.yaml
 ```
 
-Measured results are embedded in the `validation` block of
-[dataset/manifest.json](dataset/manifest.json), alongside provenance, checksums
-and the cleanup inventory. To explicitly refresh only that validation block:
+`validate-datasets` verifies the 10 source files and eight native partitions.
+`validate-benchmarks` checks the six solver-facing views, explicit label maps,
+partition policies, storage and declared preprocessing. Optional JSON reports
+must be written outside `dataset/`; the tools refuse to overwrite an original
+input, its manifest or the registry.
 
-```bash
-.venv/bin/python main.py validate-datasets --update-manifest
-```
-
-This audit does not run hardness profiling or any experiment. See
-[dataset/README.md](dataset/README.md) for loader APIs and native label conventions.
-
-These uploads remain separate from the original six-dataset manuscript loader;
-existing experiment configs have not been changed to silently substitute them.
-The LIBSVM Colon export is already normalized upstream and must not be represented
-as raw input for a strict train-only-preprocessing reproduction.
-
-### Solver-facing benchmark validation
-
-The separate [benchmark registry](configs/benchmark_registry.yaml) declares exact
-label mappings, partition policies, storage and preprocessing policies.
-Validate its in-memory views without training or changing original files:
-
-```bash
-.venv/bin/python main.py validate-benchmarks --registry configs/benchmark_registry.yaml
-# Optional report; create artifacts_v2 first if it does not exist.
-.venv/bin/python main.py validate-benchmarks --output artifacts_v2/benchmark_validation.json
-```
-
-Reports require `--overwrite` to replace an existing file and cannot overwrite
-original inputs, their manifest or the selected registry. The raw
-`validate-datasets` command remains unchanged.
+The solver-ready API requires an explicit policy:
 
 ```python
 from src.data import load_solver_ready_benchmark
 
-pool = load_solver_ready_benchmark("madelon", partition_policy="merge_labeled")
-official = load_solver_ready_benchmark("hill_valley", partition_policy="official_holdout")
-# official.X/y/sample_ids contain training rows only.
-# official.holdout.X/y/sample_ids contain the separate official test rows.
+pool = load_solver_ready_benchmark("basehock", partition_policy="pool")
+holdout = load_solver_ready_benchmark(
+    "hill_valley", partition_policy="official_holdout"
+)
 ```
 
-The API requires an explicit partition policy. `merge_labeled` uses train then
-test for Hill-Valley and train then validation for Madelon; `pool` is only for
-already-pooled sources. Stable IDs retain dataset, native partition and zero-based
-row index. Every load verifies source hashes and measured dimensions against the
-raw manifest before mapping labels to int64 `{-1, +1}`. BASEHOCK is stored dense
-in its original MAT file and is explicitly converted to CSR in memory; Colon
-stays CSR. Neither sparse input is implicitly densified.
-
-The adapter's views are **unscaled**. VeraPin now loads them with `kind: benchmark`
-and applies the declared preprocessing inside training partitions. The historical
-[Milestones 0–2 report](docs/benchmark_integration_m0_m2.md) records the initial layer;
-the [full integration report](docs/benchmark_integration_full.md) covers the completed
-code, tests, pilot evidence and remaining scientific approvals.
-
-### Benchmark pilots and final evaluation
-
-Complete **provisional software-QA** profiles are provided; their parameters are
-explicit examples, not author-approved scientific choices. Configuration checks
-do not start a solver or create a run:
-
-```bash
-.venv/bin/python main.py hardness --config configs/hardness_real_pilot.yaml --validate-only
-.venv/bin/python main.py hardness --config configs/hardness_synthetic_pilot.yaml --validate-only
-.venv/bin/python main.py adks --config configs/adks_real_pilot.yaml --validate-only
-```
-
-After reviewing the provisional settings and installing a CPLEX license that
-supports the full model, run real pilots **one at a time**:
-
-```bash
-.venv/bin/python main.py hardness --config configs/hardness_real_pilot.yaml --instance hill-valley-clean
-.venv/bin/python main.py hardness --config configs/hardness_real_pilot.yaml --instance madelon-clean
-```
-
-Continue, separately, with `gina-clean`, `hiva-clean`, `colon-clean`, then
-`basehock-clean`. The six-instance config refuses execution without narrowing the
-selection. It never subsamples or trims features to bypass a license limit.
-
-The ADKS profile requires hardness reports documenting at least two nontrivial
-instances. Evolution additionally requires a frozen ADKS baseline, fixed budgets,
-defined research groups and profiled signals. These are explicit execution gates,
-not settings that validation approves automatically.
-
-Before scoring any LLM policy, evolution precomputes one fixed reference per
-training/validation instance from cold full Pin-FS and Handcrafted ADKS, each
-with `solver.total_time_limit`. With the CPLEX backend this is Cold CPLEX; SciPy
-is available for small software tests. The minimum feasible in-budget objective
-is saved in `fitness_references.json`; no reference means evolution stops.
-This adds two offline baseline budgets per instance, outside candidate fitness.
-Every policy uses the same horizon `T = solver.total_time_limit`, including the
-tail after early stopping, and the reference never changes when a policy beats it.
-Instance/cache hashes include reference and horizon; scoring caches also include
-protocol version, target gap and failure normalization. Resume requires the
-original references and matching data/configuration. Start a new run for old
-checkpoints without these anchors; do not mix old and new fitness scores.
-
-Final benchmark evaluation uses `configs/verapin_final.yaml`: nested stratified
-5 outer × 3 inner folds, full/reduced Pin-FS tuning by inner Balanced Accuracy,
-then frozen `B/C/tau` shared by Cold CPLEX, ADKS and a frozen VeraPin policy. No
-ADKS/VeraPin runs occur inside tuning and no LLM is used during final evaluation.
-Unresolved scientific values and the frozen policy artifact remain required.
-Ties within `classification.selection_tolerance` (default `1e-12`) prefer fewer
-mean active features (`abs(w) > 1e-3`), then smaller `B`, then the same deterministic
-parameter-value order as the main nested-CV pipeline. Counts are saved per inner
-fold; failed or incomplete candidates cannot win tuning.
-
-For generated data, use `generation: clean` with `research_split` separately from
-`source_partition_policy` and `outer_fold`. Optional `label_noise`, `mixed`, `feature_outlier`,
-`combined` (mixed + feature outliers), or `high_margin_label_attack` profiles require
-explicit parameters under `corruption.profiles` and explicit `corruption.seeds`.
-Only preprocessed training data is corrupted. Each seed is a separate comparison
-instance with identical matrices/masks across routes; clean test hashes are saved.
-Sparse feature corruption also requires an explicit `max_modified_cells` cap.
-`label_noise` needs only `label_flip_rate` and works for all six benchmarks without
-changing features. In corruption protocol v2, sparse feature masks sample only
-numerically nonzero entries (stored zeros are excluded); dense masks sample all
-entries. Additive/multiplicative masks within `mixed` are disjoint, so their rates
-must sum to at most one. Counts are rounded; multiplicative count is capped to
-the remaining eligible cells if rounding exceeds capacity. Their effective rates
-use eligible cells as denominator and are reported separately from sampled counts.
-Sparse structural zeros are never filled, and zero-severity no-ops are not counted
-as changes. Feature outliers sample rows/columns, perturb only eligible cells in
-their intersection, and use `scale × std_j` from clean, preprocessed training
-features (population standard deviation, including implicit zeros). This scale is
-frozen before either stage of `combined`; constant features remain unchanged.
-Manifests store scales, selected/effective masks, counts and rates. Version 2
-changes noisy realizations for a given seed; do not pool them with legacy noisy
-outputs. Clean inputs/hardness and original dataset bytes are unchanged.
-
-CSR remains sparse through Pin-FS construction, prediction, hashing and safe
-preprocessing (`standard_sparse`, `max_abs`, `none`, or upstream-normalized
-passthrough). Dense `standard` scaling on CSR requires both `allow_densify: true`
-and `max_dense_bytes`, checked again for every transformed partition. Overrides
-belong in `preprocessing: {policy: ..., ...}` and are saved in manifests.
-Continuous sparse MI is skipped unless bounded densification is explicitly
-enabled; discrete MI must be explicitly declared. Correlation is chunked in both
-dimensions. Pilot configs disable MI/correlation and use Fisher/LP signals.
-
-Calling `main.py` without a command displays the available commands. Every run
-prints its experiment matrix and estimated fit count before training.
+Original labels are mapped into a new int64 `{-1, +1}` vector. Stable sample IDs
+preserve dataset, source partition and original row index. BASEHOCK is converted
+from its dense MAT representation to CSR in memory; Colon remains CSR. Source
+bytes, native labels and feature values are unchanged.
 
 ## Commands
 
-```bash
-# Audit every dataset and validate a configuration
-.venv/bin/python main.py validate --config configs/pilot.yaml
+The CLI exposes only the active pipeline:
 
-# Run the small end-to-end verification experiment
-.venv/bin/python main.py pilot --config configs/pilot.yaml
-
-# Resume an interrupted experiment
-.venv/bin/python main.py pilot --config configs/pilot.yaml --resume results_v2/<run_id>
-
-# Run the full benchmark after resolving all author-confirmation gates
-.venv/bin/python main.py run --config configs/full.yaml --confirm-full-run
-
-# Generate analysis artifacts from a completed run
-.venv/bin/python main.py analyze --run-dir results_v2/<run_id>
-.venv/bin/python main.py plot --run-dir results_v2/<run_id>
-.venv/bin/python main.py statistics --run-dir results_v2/<run_id>
+```text
+validate-datasets
+validate-benchmarks
+hardness
+kernel-search
+adks
+evolve-verapin
+evaluate-verapin
+verify-policy
+replay-evolution
 ```
 
-Sensitivity and ablation experiments use `configs/sensitivity.yaml` and
-`configs/ablation.yaml`, respectively.
-
-VeraPin-KS infrastructure commands are separate from the manuscript benchmark:
+Configuration validation is solver-free and creates no run directory:
 
 ```bash
-# Cold-CPLEX hardness profiling
+.venv/bin/python main.py hardness \
+  --config configs/hardness_real_pilot.yaml --validate-only
+.venv/bin/python main.py hardness \
+  --config configs/hardness_synthetic_pilot.yaml --validate-only
+.venv/bin/python main.py adks \
+  --config configs/adks_real_pilot.yaml --validate-only
+```
+
+The real hardness pilot requires an explicit single instance. After reviewing
+the provisional settings and installing an adequate CPLEX license:
+
+```bash
+.venv/bin/python main.py hardness \
+  --config configs/hardness_real_pilot.yaml --instance hill-valley-clean
+```
+
+Continue with other IDs separately. Do not launch ADKS/evolution/final runs
+until the gates in [AUTHOR_DECISIONS_REQUIRED.md](AUTHOR_DECISIONS_REQUIRED.md)
+are resolved.
+
+Core workflow commands are:
+
+```bash
+# Cold full Pin-FS hardness profiling
 .venv/bin/python main.py hardness --config configs/hardness.yaml
 
-# Static KS and handcrafted ADKS pilots
+# Static KS and Handcrafted ADKS
 .venv/bin/python main.py kernel-search --config configs/static_ks_pilot.yaml
 .venv/bin/python main.py adks --config configs/adks_pilot.yaml
 
-# Train-only evolution, validation-only freezing, and replay audit
+# Train-only evolution, validation-only policy freezing, and offline replay
 .venv/bin/python main.py evolve-verapin --config configs/verapin_evolution.yaml
 .venv/bin/python main.py replay-evolution --run-dir results_verapin/<run_id>
 
-# Held-out comparison; this path never creates an LLM provider
+# Held-out comparison; this route never constructs an LLM provider
 .venv/bin/python main.py evaluate-verapin \
   --config configs/verapin_final.yaml --confirm-full-run
 ```
 
-The distributed VeraPin configs deliberately contain `null` author-decision gates.
-The CLI lists every unresolved field before creating a run directory. Record the
-choices in `AUTHOR_DECISIONS_REQUIRED.md` and the relevant config before running;
-the repository does not silently invent scientific parameters.
+## Scientific protocol
 
-Final classification metrics use deterministic stratified outer folds. Every
-route is optimized on the outer-training partition, preprocessing is fitted only
-there, and Balanced Accuracy/F1/Accuracy/G-mean are computed on the untouched
-outer-test partition. In-sample optimization data are not reported as
-classification test results.
+- Benchmark and synthetic inputs are distinct typed instance kinds.
+- Scientific final evaluation uses 5 outer × 3 inner stratified folds.
+- Preprocessing is fitted only on the applicable training partition.
+- Corruption is generated only after splitting and only on training data.
+- Inner Balanced Accuracy selects `B/C/tau` using full/reduced Pin-FS only.
+- Ties prefer fewer active features (`abs(w) > 1e-3`), then smaller `B`,
+  then deterministic parameter order.
+- Cold CPLEX, ADKS and frozen VeraPin share the same prepared outer-training
+  input and are evaluated on the same untouched outer-test partition.
+- Restricted MILP gaps remain local diagnostics; they are not connected across
+  different feasible regions. Comparable route gaps require full refinement.
+- Classification metrics are Balanced Accuracy, weighted F1, Accuracy and
+  G-mean on held-out data, never the solver training matrix.
 
-## VeraPin-KS solver and search API
+Evolution precomputes a policy-independent reference for every train/validation
+instance from cold full Pin-FS and fixed Handcrafted ADKS. Both baselines receive
+the same `solver.total_time_limit` as every candidate. The best feasible
+in-budget objective is frozen in `fitness_references.json`; absence of a valid
+reference aborts before any LLM provider is created. All policies use the same
+horizon, including the tail after early stopping. Reference, horizon, scoring
+protocol, target gap and failure normalization participate in cache/checkpoint
+identity. Resume requires the original reference artifact.
 
-`src.search` exposes the paper formulation as reusable solver data and supports
-feature-kernel restrictions without changing the original objective or constraints.
-Features outside the kernel are fixed with `v_j = 0`; active features are always
-derived from `abs(w_j) > 1e-3`, not from the binary selector alone.
+Corruption protocol v2 supports `label_noise`, `mixed`, `feature_outlier`,
+`combined`, and an explicitly named optional high-margin label attack. Sparse
+feature noise samples only numerical nonzeros and never fills structural zeros.
+Additive and multiplicative masks are disjoint. Manifests distinguish selected
+cells from actual changes and report effective rates. Outlier magnitude is
+`scale × std_j`, with population standard deviation fitted on clean preprocessed
+training data; constant features remain unchanged and combined corruption freezes
+the scale before its first stage.
+
+## Pin-FS and Kernel Search APIs
+
+`src.search` exposes the full/restricted formulation, MIP-start conversion,
+progress trajectories and the shared kernel engine:
 
 ```python
-from src.search import (
-    build_pin_fs_problem,
-    result_to_mip_start,
-    solve_restricted_pin_fs,
-)
+from src.search import build_pin_fs_problem, result_to_mip_start, solve_restricted_pin_fs
 
 restricted = solve_restricted_pin_fs(
-    X,
-    y,
+    X, y,
     kernel={0, 2, 5},
-    B=2,
-    C=1.0,
-    tau=0.5,
+    B=2, C=1.0, tau=0.5,
     coefficient_bounds=(-2.0, 2.0),
     backend="cplex",
     time_limit=60.0,
@@ -281,91 +179,49 @@ restricted = solve_restricted_pin_fs(
 )
 
 full_problem = build_pin_fs_problem(
-    X,
-    y,
-    B=2,
-    C=1.0,
-    tau=0.5,
-    lower_bound=-2.0,
-    upper_bound=2.0,
+    X, y, B=2, C=1.0, tau=0.5,
+    lower_bound=-2.0, upper_bound=2.0,
 )
 warm_start = result_to_mip_start(restricted, full_problem)
 ```
 
-The returned result includes the complete decision vector split into `w`, `b`,
-`z`, `xi`, and `v`, solver diagnostics, CPLEX MIP-start status, and a timestamped
-incumbent/bound/gap/node trajectory. Malformed starts raise a validation error and
-are never silently ignored. The original `PinFSSVM.fit(X, y)` API remains unchanged.
-
-The same `run_kernel_search` engine executes Static KS, handcrafted ADKS, and a
-frozen VeraPin policy. Policy formulas live outside the engine, incumbent support
-is retained, and signal, LP-relaxation, policy, MIP-start, restricted-solve, and
-final-refinement time all count against one wall-clock budget. Static and ADKS
-weights are deterministic and config-driven.
-
-Restricted-kernel bounds and MIP gaps are retained only as per-iteration local
-diagnostics; they are never spliced into the full-model trajectory. Route-level
-gap fields remain empty until a final unrestricted refinement supplies a comparable
-full-model bound. After all comparison routes finish, primal integrals are
-recomputed with the same best-known feasible objective for that instance.
-
-VeraPin candidates are typed JSON expression trees. The bounded interpreter allows
-only arithmetic, clipping, and conditionals over an explicit signal allowlist. It
-does not execute generated Python or expose imports, files, network, subprocesses,
-reflection, or loops. Evolution prompts contain training summaries only; policy
-selection uses validation instances; `evaluate-verapin` loads the frozen JSON and
-makes no LLM call. Prompts, responses, token usage, latency, estimated cost,
-checkpoints, and cache keys are retained for audit/replay.
-
-## Experimental protocol
-
-- Full experiments use 5 outer and 3 inner stratified folds.
-- Scaling is fit only on each training partition.
-- Inner model selection maximizes Balanced Accuracy.
-- Ties are resolved by fewer active features, smaller `B`, then parameter order.
-- Fisher thresholds (25th, 50th, and 75th percentiles) are selected inside inner CV.
-- Outer test folds remain clean unless a configuration explicitly says otherwise.
-- Predictions are restricted to `{-1, +1}`.
-- Reported metrics are Balanced Accuracy, weighted F1, Accuracy, and G-mean.
-- Seeds, fold indices, corruption manifests, hyperparameter searches, predictions,
-  scores, coefficients, selected features, and solver diagnostics are saved.
-- Optional Wilcoxon tests with Benjamini-Hochberg correction run after training and
-  are not part of model selection.
+VeraPin candidates are typed JSON expression trees interpreted by a bounded DSL.
+Generated policies cannot execute Python, imports, files, network, subprocesses,
+reflection or loops. Prompts receive training summaries only; freezing uses the
+validation research group; held-out final evaluation loads frozen JSON and does
+not call an LLM.
 
 ## Repository layout
 
 ```text
-main.py                         command-line entry point
-configs/                        pilot, full, sensitivity, ablation, and dataset specs
-dataset/                        original uploaded files, documentation, and checksums
-src/data/                       loading, validation, partitioning, and corruption
-src/models/corrected/           corrected proposed and baseline estimators
-src/search/                     restricted Pin-FS builder, MIP starts, and progress
-src/search/policies/            Static KS, handcrafted ADKS, and frozen VeraPin
-src/search/llm_evolution/       safe DSL, providers, evaluation, cache, evolution
-src/evaluation/                 nested cross-validation and metrics
-src/experiments/                configuration, search, registry, and run orchestration
-src/statistics/                 post-hoc statistical analysis
-src/reporting/                  tables and plots from saved results
-src/utils/                      manifests, seeds, serialization, and logging
-tests/                          automated validation of the corrected pipeline
+main.py                         active command-line interface
+configs/                        VeraPin, hardness, Static-KS and registry configs
+dataset/                        original uploads, provenance and checksums
+src/data/                       benchmark adapters, preprocessing, corruption
+src/evaluation/                 classification metrics and feature stability
+src/experiments/                preparation, tie-break, gates and orchestration
+src/models/corrected/           retained Pin/L1/MILP model implementations
+src/reporting/                  route tables and solver profiles
+src/search/                     restricted solver and shared kernel engine
+src/search/policies/            Static KS, Handcrafted ADKS and frozen VeraPin
+src/search/llm_evolution/       safe policy DSL, evaluation, cache and evolution
+src/utils/                      config, matrix, seed and serialization helpers
+tests/                          active-pipeline regression tests
 ```
 
-Generated run directories are created under `results_v2/` and are intentionally
-untracked. Cross-run reports and logs may likewise be written under `artifacts_v2/`
-and `logs_v2/` without becoming part of the source repository.
-VeraPin runs and frozen-policy artifacts use `results_verapin/` and
-`artifacts_verapin/`, which are also intentionally untracked.
+Detailed implementation evidence is retained in
+[docs/benchmark_integration_full.md](docs/benchmark_integration_full.md).
+Generated results and validation reports remain ignored under `results_verapin/`,
+`artifacts_verapin/` and `artifacts_v2/`.
 
 ## Verification
 
-After installing the dependencies (only legacy data integration tests require
-restoring the original manuscript datasets):
-
 ```bash
+PYTHONPYCACHEPREFIX=/tmp/pinfs-pycache .venv/bin/python -m compileall -q main.py src
 PYTHONPYCACHEPREFIX=/tmp/pinfs-pycache .venv/bin/python -m pytest -q
+.venv/bin/python main.py validate-datasets
+.venv/bin/python main.py validate-benchmarks
 ```
 
-Before launching the full experiment, resolve every `null` corruption parameter in
-`configs/full.yaml`, review the preserved `[-2, 2]` coefficient-bound assumption,
-and set `coefficient_bounds.author_confirmed` to `true` only after confirmation.
+These checks do not authorize or launch hardness, ADKS, evolution or final
+experiments.
