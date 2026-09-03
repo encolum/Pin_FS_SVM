@@ -7,7 +7,6 @@ from src.search.llm_evolution.candidate_parser import (
     parse_candidates,
 )
 from src.search.llm_evolution.sandbox import compile_expression
-from src.search.states import FeatureState, SearchState
 
 
 def valid_candidate(policy_id="safe"):

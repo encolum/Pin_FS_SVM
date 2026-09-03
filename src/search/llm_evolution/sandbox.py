@@ -36,8 +36,6 @@ FEATURE_SIGNALS = {
     "selection_frequency",
     "inactive_iterations",
     "kernel_age",
-    "l1_abs_coefficient",
-    "pin_abs_coefficient",
     "support_redundancy",
 }
 

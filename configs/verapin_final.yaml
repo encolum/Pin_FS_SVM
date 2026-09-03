@@ -79,8 +79,6 @@
     "acceptance_epsilon": 1e-9,
     "seed": 0,
     "signal_options": {
-      "use_l1": false,
-      "use_pin": false,
       "use_lp": true,
       "lp_backend": "cplex",
       "lp_time_limit": null,

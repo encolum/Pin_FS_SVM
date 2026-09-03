@@ -8,9 +8,9 @@ import pytest
 from scipy import sparse
 import yaml
 
-from src.data import benchmark_adapter as adapter
-from src.data.benchmark_loaders import DEFAULT_BENCHMARK_ROOT, load_benchmark_dataset, sha256_file
-from src.data.benchmark_registry import DEFAULT_REGISTRY_PATH, read_benchmark_registry
+from src.data import benchmark_data as adapter
+from src.data.benchmark_data import DEFAULT_REGISTRY_PATH, read_benchmark_registry
+from src.data.data_loader import DEFAULT_BENCHMARK_ROOT, load_benchmark_dataset, sha256_file
 
 
 EXPECTED = {

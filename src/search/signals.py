@@ -17,8 +17,6 @@ from sklearn.feature_selection import mutual_info_classif
 
 from src.models.base import scipy_status, validate_training_data
 from src.models.cplex_backend import solve_docplex, validate_backend
-from src.models.l1_svm import L1SVM
-from src.models.pin_svm import PinSVM
 
 from .restricted_solver import build_pin_fs_problem
 from .states import FeatureState, RestrictedSolveResult
@@ -188,8 +186,6 @@ def compute_static_signals(
     tau: float,
     coefficient_bounds: tuple[float, float],
     seed: int,
-    use_l1: bool = False,
-    use_pin: bool = False,
     use_lp: bool = True,
     use_fisher: bool = True,
     use_mutual_information: bool = True,
@@ -197,7 +193,6 @@ def compute_static_signals(
     mutual_information_discrete: bool = False,
     allow_densify: bool = False,
     max_dense_bytes: int | None = None,
-    baseline_backend: str = "scipy",
     lp_backend: str = "scipy",
     lp_time_limit: float | None = None,
     threads: int = 1,
@@ -210,8 +205,6 @@ def compute_static_signals(
     started = perf_counter()
     overhead: dict[str, float] = {}
     normalizer = NormalizationParameters()
-    baseline_backend = validate_backend(baseline_backend)
-
     stage = perf_counter()
     _check_deadline(deadline)
     if type(correlation_chunk_size) is not int or correlation_chunk_size < 1:
@@ -245,46 +238,6 @@ def compute_static_signals(
         skipped["correlation"] = "disabled by config (includes dynamic support redundancy)"
     overhead["correlation"] = perf_counter() - stage
 
-    l1_coefficients = np.zeros(X.shape[1], dtype=float)
-    if use_l1:
-        _check_deadline(deadline)
-        stage = perf_counter()
-        _baseline_memory_guard(X, "l1", max_dense_bytes)
-        baseline_X = guarded_dense(X, allow_densify=allow_densify, max_dense_bytes=max_dense_bytes)
-        l1 = L1SVM(
-            C=C,
-            time_limit=_remaining(deadline),
-            backend=baseline_backend,
-            threads=threads,
-        ).fit(baseline_X, y)
-        l1_coefficients = np.abs(np.asarray(l1.w_, dtype=float))
-        overhead["l1"] = perf_counter() - stage
-        _check_deadline(deadline)
-
-    pin_coefficients = np.zeros(X.shape[1], dtype=float)
-    if use_pin and baseline_backend == "scipy" and deadline is not None:
-        skipped["pin"] = "SciPy SLSQP has no enforceable wall-clock limit; use CPLEX for a budgeted Pin signal"
-        use_pin = False
-    if use_pin:
-        _check_deadline(deadline)
-        if deadline is not None and baseline_backend != "cplex":
-            raise ValueError(
-                "use_pin under a strict wall-clock budget requires baseline_backend='cplex'"
-            )
-        stage = perf_counter()
-        _baseline_memory_guard(X, "pin", max_dense_bytes)
-        baseline_X = guarded_dense(X, allow_densify=allow_densify, max_dense_bytes=max_dense_bytes)
-        pin = PinSVM(
-            C=C,
-            tau=tau,
-            time_limit=_remaining(deadline),
-            backend=baseline_backend,
-            threads=threads,
-        ).fit(baseline_X, y)
-        pin_coefficients = np.abs(np.asarray(pin.w_, dtype=float))
-        overhead["pin"] = perf_counter() - stage
-        _check_deadline(deadline)
-
     lp_result = None
     lp_activation = np.zeros(X.shape[1], dtype=float)
     lp_coefficients = np.zeros(X.shape[1], dtype=float)
@@ -316,8 +269,6 @@ def compute_static_signals(
         "mutual_information": mi,
         "mean_abs_correlation": mean_corr,
         "max_abs_correlation": max_corr,
-        "l1_abs_coefficient": l1_coefficients,
-        "pin_abs_coefficient": pin_coefficients,
         "lp_activation": lp_activation,
         "lp_abs_coefficient": lp_coefficients,
     }
@@ -389,8 +340,6 @@ def build_feature_states(
             selection_frequency=float(frequencies[j]),
             inactive_iterations=int(inactive_iterations[j]),
             kernel_age=int(kernel_age[j]),
-            l1_abs_coefficient=float(static.values["l1_abs_coefficient"][j]),
-            pin_abs_coefficient=float(static.values["pin_abs_coefficient"][j]),
             support_redundancy=float(redundancy[j]),
         )
         for j in range(n)
@@ -410,14 +359,6 @@ def _moments(X):
     if sparse.issparse(X):
         return mean_variance_axis(X, axis=0)
     return X.mean(axis=0), X.var(axis=0)
-
-
-def _baseline_memory_guard(X, kind, maximum):
-    if sparse.issparse(X):
-        m, n = X.shape
-        required = ((m + 2 * n) * (m + 2 * n + 1) if kind == "l1" else 2 * m * (n + 1 + m)) * 8
-        if type(maximum) is not int or required > maximum:
-            raise ValueError(f"optional dense {kind} signal model exceeds max_dense_bytes ({required} bytes)")
 
 
 def _standardize(X: np.ndarray) -> np.ndarray:

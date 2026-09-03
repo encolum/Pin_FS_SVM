@@ -12,8 +12,6 @@ _STATIC_SIGNALS = {
     "mutual_information",
     "mean_abs_correlation",
     "max_abs_correlation",
-    "l1_abs_coefficient",
-    "pin_abs_coefficient",
     "lp_activation",
     "lp_abs_coefficient",
 }
@@ -53,13 +51,6 @@ class StaticKSPolicy:
                 features,
                 key=lambda feature: (-float(getattr(feature, self.score_name)), feature.index),
             )
-        ]
-
-    def buckets(self, features: list[FeatureState]) -> list[list[int]]:
-        order = self.stable_order(features)
-        return [
-            order[start : start + self.bucket_size]
-            for start in range(self.initial_kernel_size, len(order), self.bucket_size)
         ]
 
     def initialize_kernel(

@@ -16,13 +16,8 @@ def _instance(seed=7):
         redundant_ratio=0.25,
         correlation_strength=0.9,
         positive_class_fraction=0.5,
-        label_noise_rate=0.0,
-        outlier_sample_rate=0.0,
-        outlier_feature_rate=0.0,
-        outlier_scale=0.0,
         feature_budget_ratio=0.25,
         seed=seed,
-        split="train",
     )
 
 

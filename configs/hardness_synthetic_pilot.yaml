@@ -9,7 +9,6 @@
     {
       "id": "synthetic-clean-pilot",
       "kind": "synthetic",
-      "generation": "clean",
       "research_split": "test",
       "condition": "clean",
       "n_samples": 40,

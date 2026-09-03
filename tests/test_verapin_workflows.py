@@ -1,5 +1,4 @@
 import csv
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -16,7 +15,8 @@ def test_evolution_workflow_prepares_references_before_provider(tmp_path, monkey
 
     config = {
         "instances": [_instance("train"), {**_instance("validation"), "seed": 11}],
-        "problem": {"C": 1., "tau": .5, "coefficient_bounds": {"lower": -4., "upper": 4.}},
+        "problem": {"C": 1., "tau": .5, "coefficient_bounds": {
+            "lower": -4., "upper": 4., "author_confirmed": True}},
         "solver": {"backend": "scipy", "threads": 1, "total_time_limit": 3., "subproblem_time_limit": 1., "mip_gap": 0.},
         "search": _search(), "adks_policy": _adks(), "seed_policies": [_candidate()],
         "evolution": {"generations": 1, "population_size": 1, "parent_count": 1,
@@ -57,17 +57,15 @@ def test_evolution_workflow_prepares_references_before_provider(tmp_path, monkey
 def _instance(split):
     return {
         "id": f"tiny-{split}",
-        "split": split,
+        "kind": "synthetic",
+        "research_split": split,
+        "condition": "clean",
         "n_samples": 20,
         "n_features": 8,
         "informative_ratio": 0.25,
         "redundant_ratio": 0.25,
         "correlation_strength": 0.9,
         "positive_class_fraction": 0.5,
-        "label_noise_rate": 0.0,
-        "outlier_sample_rate": 0.0,
-        "outlier_feature_rate": 0.0,
-        "outlier_scale": 0.0,
         "feature_budget_ratio": 0.25,
         "seed": 8,
     }
@@ -140,7 +138,8 @@ def _candidate():
 def test_static_workflow_persists_route_and_iteration_schemas(tmp_path):
     config = {
         "instances": [_instance("train")],
-        "problem": {"C": 1.0, "tau": 0.5, "coefficient_bounds": {"lower": -4.0, "upper": 4.0}},
+        "problem": {"C": 1.0, "tau": 0.5, "coefficient_bounds": {
+            "lower": -4.0, "upper": 4.0, "author_confirmed": True}},
         "solver": {"backend": "scipy", "threads": 1, "total_time_limit": 2.0, "subproblem_time_limit": 0.5, "mip_gap": 0.0},
         "search": _search(),
         "static_policy": {"score_name": "fisher_score", "initial_kernel_size": 2, "bucket_size": 2, "maximum_kernel_size": 8},
@@ -168,13 +167,24 @@ def test_final_workflow_uses_three_routes_without_constructing_llm_provider(tmp_
     monkeypatch.setattr("src.experiments.verapin.EnvironmentLLMProvider", forbidden_provider)
     config = {
         "instances": [_instance("test")],
-        "problem": {"C": 1.0, "tau": 0.5, "coefficient_bounds": {"lower": -4.0, "upper": 4.0}},
+        "problem": {"C": 1.0, "tau": 0.5, "coefficient_bounds": {
+            "lower": -4.0, "upper": 4.0, "author_confirmed": True}},
         "solver": {"backend": "cplex", "threads": 1, "total_time_limit": 2.0, "subproblem_time_limit": 0.5, "mip_gap": 0.0},
         "search": _search(),
         "adks_policy": _adks(),
-        "classification": {"outer_folds": 2, "outer_seed": 19},
+        "classification": {
+            "outer_folds": 2,
+            "inner_folds": 2,
+            "outer_seed": 19,
+            "inner_seed": 23,
+            "parameter_grid": {"B": [2], "C": [1.0], "tau": [0.5]},
+            "tuning_solver": {
+                "backend": "cplex", "time_limit": 1.0, "mip_gap": 0.0, "threads": 1
+            },
+        },
         "frozen_policy_path": str(policy_path),
         "output": {"root": str(tmp_path / "final")},
+        "execution": {"purpose": "provisional_pilot"},
     }
     run_dir = run_verapin_final(config)
     with (run_dir / "route_results.csv").open(newline="", encoding="utf-8") as stream:
@@ -208,6 +218,5 @@ def test_final_workflow_uses_three_routes_without_constructing_llm_provider(tmp_
         test = set(fold_manifest["test_indices"])
         assert train.isdisjoint(test)
         assert len(train | test) == 20
-        assert fold_manifest["preprocessing"] == (
-            "standard_scaler_fit_on_outer_train_only"
-        )
+        assert fold_manifest["preprocessing_policy"] == "standard"
+        assert fold_manifest["preprocessing_parameters"]["fit_partition"] == "training_only"

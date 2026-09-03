@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 from src.utils.config import load_config
@@ -15,19 +14,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     raw_data = subparsers.add_parser("validate-datasets", help="inspect original uploads; no training")
     raw_data.add_argument("--data-root")
-    report_destination = raw_data.add_mutually_exclusive_group()
-    report_destination.add_argument("--output", help="export a separate JSON validation report")
-    report_destination.add_argument("--update-manifest", action="store_true",
-                                    help="refresh only the validation block in dataset/manifest.json")
-    raw_data.add_argument("--overwrite", action="store_true", help="replace an existing validation report")
 
     benchmarks = subparsers.add_parser("validate-benchmarks", help="audit solver-facing benchmark views; no training")
-    from src.data.benchmark_registry import DEFAULT_REGISTRY_PATH
+    from src.data.benchmark_data import DEFAULT_REGISTRY_PATH
 
     benchmarks.add_argument("--registry", default=str(DEFAULT_REGISTRY_PATH))
     benchmarks.add_argument("--data-root")
-    benchmarks.add_argument("--output", help="export a separate JSON validation report")
-    benchmarks.add_argument("--overwrite", action="store_true", help="replace an existing validation report")
 
     for command in ("hardness", "adks"):
         sub = subparsers.add_parser(command)
@@ -60,18 +52,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 0
     if args.command == "validate-benchmarks":
-        from src.data.benchmark_adapter import audit_solver_ready_benchmarks
-        from src.data.benchmark_validation import write_validation_manifest
+        from src.data.benchmark_data import audit_solver_ready_benchmarks
 
         try:
-            if args.output:
-                output, registry = Path(args.output).resolve(), Path(args.registry).resolve()
-                if output == registry or (output.exists() and registry.exists() and output.samefile(registry)):
-                    raise ValueError("validation output must not overwrite the benchmark registry")
             report = audit_solver_ready_benchmarks(data_root=args.data_root, registry_path=args.registry)
-            if args.output:
-                write_validation_manifest(report, args.output, data_root=args.data_root,
-                                          overwrite=args.overwrite)
         except (ValueError, OSError) as exc:
             parser.error(str(exc))
         passed = sum(row["status"] == "passed" for row in report)
@@ -93,17 +77,10 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  {row['dataset']}: failed: {error}")
         return 0 if passed == len(report) else 1
     if args.command == "validate-datasets":
-        from src.data.benchmark_validation import (
-            audit_benchmark_datasets, update_dataset_validation, write_validation_manifest,
-        )
+        from src.data.benchmark_data import audit_benchmark_datasets
 
         try:
             report = audit_benchmark_datasets(data_root=args.data_root)
-            if args.output:
-                write_validation_manifest(report, args.output, data_root=args.data_root,
-                                          overwrite=args.overwrite)
-            elif args.update_manifest:
-                update_dataset_validation(report, data_root=args.data_root)
         except (ValueError, OSError) as exc:
             parser.error(str(exc))
         print(f"Original benchmark validation: {report['status']}; {report['summary']}")
@@ -126,9 +103,9 @@ def main(argv: list[str] | None = None) -> int:
         print(verify_policy_file(args.policy))
         return 0
     if args.command == "replay-evolution":
-        from src.experiments.verapin import replay_evolution_audit
+        from src.search.llm_evolution.replay import evolution_audit
 
-        print(replay_evolution_audit(args.run_dir))
+        print(evolution_audit(args.run_dir))
         return 0
     if args.command in {
         "hardness",
@@ -151,14 +128,11 @@ def main(argv: list[str] | None = None) -> int:
             if set(selected) - known:
                 parser.error("unknown instance selection")
             config["instances"] = [item for item in config["instances"] if item["id"] in selected]
-        try:
-            validate_verapin_config(config, command=args.command)
-            if not args.validate_only:
-                from src.experiments.readiness import check_execution_readiness
-                check_execution_readiness(config, args.command)
-        except ValueError as exc:
-            parser.error(str(exc))
         if args.validate_only:
+            try:
+                validate_verapin_config(config, command=args.command)
+            except ValueError as exc:
+                parser.error(str(exc))
             print("VeraPin configuration valid; no run directory, solver or LLM call created.")
             return 0
         if args.command == "evaluate-verapin" and not args.confirm_full_run:
@@ -167,20 +141,20 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Instances: {[item['id'] for item in config['instances']]}")
         print(f"Solver: {config['solver']}")
         print(f"Output directory: {config.get('output', {}).get('root', 'results_verapin')}")
-        sys.stdout.flush()
-        if args.command == "hardness":
-            output = run_hardness_benchmark(config)
-        elif args.command == "adks":
-            output = run_adks(config)
-        elif args.command == "evolve-verapin":
-            output = run_verapin_evolution(config, resume_dir=args.resume)
-        else:
-            output = run_verapin_final(config)
+        try:
+            if args.command == "hardness":
+                output = run_hardness_benchmark(config)
+            elif args.command == "adks":
+                output = run_adks(config)
+            elif args.command == "evolve-verapin":
+                output = run_verapin_evolution(config, resume_dir=args.resume)
+            else:
+                output = run_verapin_final(config)
+        except ValueError as exc:
+            parser.error(str(exc))
         print(f"Completed VeraPin run: {output}")
         from src.utils.serialization import read_json
         return 0 if read_json(Path(output) / "manifest.json")["status"] == "complete" else 1
-
-    parser.error("unknown command")
 
 
 if __name__ == "__main__":

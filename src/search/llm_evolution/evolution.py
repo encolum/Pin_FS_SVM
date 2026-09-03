@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import json
 from pathlib import Path
 from typing import Any
 
@@ -20,8 +21,8 @@ from .evaluator import (
     validate_fitness_protocol,
 )
 from .population import PopulationMember, select_strong_diverse, update_population
-from .prompt_builder import build_evolution_prompt
 from .provider import LLMProvider
+from .sandbox import ALLOWED_OPERATIONS, FEATURE_SIGNALS, SEARCH_SIGNALS
 from .schemas import PolicyCandidate
 
 
@@ -51,10 +52,51 @@ class EvolutionConfig:
 @dataclass
 class EvolutionResult:
     frozen_candidate: PolicyCandidate
-    validation_evaluation: PolicyEvaluation
-    population: list[PopulationMember]
-    generations_completed: int
     run_dir: Path
+
+
+def build_evolution_prompt(
+    *,
+    generation: int,
+    training_summary: list[dict[str, Any]],
+    parent_policies: list[dict[str, Any]],
+    failure_summary: list[dict[str, Any]],
+    requested_candidates: int,
+) -> str:
+    """Build a deterministic prompt without exposing held-out results."""
+    if int(requested_candidates) < 1:
+        raise ValueError("requested_candidates must be positive")
+    envelope = {
+        "task": "Generate deterministic VeraPin kernel-policy mutations as typed JSON only.",
+        "generation": int(generation),
+        "requested_candidates": int(requested_candidates),
+        "scientific_constraints": [
+            "The policy controls kernel ranking and size only.",
+            "It must not modify the Pin-FS objective or constraints.",
+            "It receives training/search signals only and no held-out results.",
+            "Return a JSON object with a candidates list and no executable code.",
+        ],
+        "dsl": {
+            "allowed_operations": sorted(ALLOWED_OPERATIONS),
+            "feature_signals": sorted(FEATURE_SIGNALS),
+            "search_signals": sorted(SEARCH_SIGNALS),
+            "candidate_fields": [
+                "schema_version",
+                "policy_id",
+                "name",
+                "initial_kernel_size",
+                "initial_score",
+                "add_score",
+                "keep_score",
+                "target_kernel_size",
+                "metadata",
+            ],
+        },
+        "training_evaluations": training_summary,
+        "parents": parent_policies,
+        "failures": failure_summary,
+    }
+    return json.dumps(envelope, sort_keys=True, indent=2)
 
 
 def run_evolution(
@@ -246,9 +288,6 @@ def run_evolution(
     )
     return EvolutionResult(
         frozen_candidate=frozen_candidate,
-        validation_evaluation=selected_validation,
-        population=population,
-        generations_completed=evolution_config.generations,
         run_dir=run_dir,
     )
 
@@ -258,10 +297,10 @@ def _validate_partitions(
 ) -> None:
     if not training or not validation:
         raise ValueError("training and validation partitions must both be non-empty")
-    if any(instance.split != "train" for instance in training):
-        raise ValueError("training_instances may contain only split='train'")
-    if any(instance.split != "validation" for instance in validation):
-        raise ValueError("validation_instances may contain only split='validation'")
+    if any(instance.research_split != "train" for instance in training):
+        raise ValueError("training_instances may contain only research_split='train'")
+    if any(instance.research_split != "validation" for instance in validation):
+        raise ValueError("validation_instances may contain only research_split='validation'")
     train_ids = {instance.instance_id for instance in training}
     validation_ids = {instance.instance_id for instance in validation}
     overlap = sorted(train_ids & validation_ids)

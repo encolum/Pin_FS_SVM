@@ -46,17 +46,14 @@ the `validation` block, avoiding a circular self-hash.
 # Read-only checks: no input or metadata writes, no solver.
 python main.py validate-datasets
 python -m pytest tests/test_dataset_originals.py tests/test_benchmark_loaders.py -q
-
-# Explicitly refresh only manifest.json's validation block.
-python main.py validate-datasets --update-manifest
 ```
 
 ## Six read-only loaders
 
-`src/data/benchmark_loaders.py` exposes `load_basehock`, `load_colon`,
+`src/data/data_loader.py` exposes `load_basehock`, `load_colon`,
 `load_gina`, `load_hiva`, `load_hill_valley`, and `load_madelon`, plus a
-`load_benchmark_dataset` dispatcher. They return `RawBenchmarkDataset` objects
-with `X`, `y`, source hashes and split identity.
+`load_benchmark_dataset` dispatcher. Internally they return records containing
+`X`, `y`, source hashes and split identity.
 
 ```python
 from src.data import load_basehock, load_gina, load_hill_valley, load_madelon

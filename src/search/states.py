@@ -39,11 +39,6 @@ class PinFSProblemData:
     def number_of_variables(self) -> int:
         return int(self.c.size)
 
-    @property
-    def number_of_features(self) -> int:
-        return int(self.w_slice.stop - self.w_slice.start)
-
-
 @dataclass
 class RestrictedSolveResult:
     """Complete result of a full- or restricted-kernel Pin-FS solve."""
@@ -87,8 +82,6 @@ class FeatureState:
     inactive_iterations: int
     kernel_age: int
 
-    l1_abs_coefficient: float = 0.0
-    pin_abs_coefficient: float = 0.0
     support_redundancy: float = 0.0
 
 

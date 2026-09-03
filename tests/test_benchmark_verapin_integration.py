@@ -8,7 +8,7 @@ from src.utils.config import load_config
 from src.experiments.verapin import _policy_instances, validate_verapin_config
 from src.experiments import benchmark_instances as preparation
 from src.experiments.readiness import check_execution_readiness
-from src.data.corruptions import array_hash
+from src.utils.matrices import data_hash
 from src.utils.serialization import read_json
 
 
@@ -24,7 +24,7 @@ def test_each_real_benchmark_builds_policy_instance_without_solving(index, tmp_p
     assert instance.X_test is None
     assert metadata["source_hashes"] and metadata["label_mapping"]
     assert metadata["preprocessing_parameters"]["fit_samples"] == len(instance.y)
-    assert metadata["training_hash"] == array_hash(instance.X, instance.y)
+    assert metadata["training_hash"] == data_hash(instance.X, instance.y)
     assert metadata["corruption_manifest"]["condition"] == "clean"
     assert not metadata["densified"]
     assert len(instance.instance_hash) == 64
@@ -155,13 +155,6 @@ def test_validate_only_does_not_start_solver_or_create_run(tmp_path, monkeypatch
     assert "no run directory" in capsys.readouterr().out
 
 
-def test_source_and_research_split_cannot_be_confused():
-    config = load_config("configs/hardness_real_pilot.yaml")
-    config["instances"][0]["split"] = "train"
-    with pytest.raises(ValueError, match="conflicting"):
-        validate_verapin_config(config, command="hardness")
-
-
 def test_nested_final_three_routes_share_corrupted_input_and_never_call_llm(tmp_path, monkeypatch):
     import csv
     from src.experiments import verapin
@@ -189,7 +182,7 @@ def test_nested_final_three_routes_share_corrupted_input_and_never_call_llm(tmp_
     observed = {}
     cold, engine = verapin._run_cold_impl, verapin._run_engine
     def observe(instance):
-        digest = array_hash(instance.X, instance.y)
+        digest = data_hash(instance.X, instance.y)
         assert digest == instance.metadata["training_hash"]
         observed.setdefault(instance.instance_id, []).append((digest, instance.B, instance.C, instance.tau))
     def spy_cold(instance, *args, **kwargs):

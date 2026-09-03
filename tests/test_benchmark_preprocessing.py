@@ -1,8 +1,9 @@
 import numpy as np
 import pytest
 from scipy import sparse
-from src.data.benchmark_adapter import load_solver_ready_benchmark
-from src.data.preprocessing import fit_preprocessor, transform_partition, estimate_dense_bytes
+from src.data.benchmark_data import load_solver_ready_benchmark
+from src.data.preprocessing import fit_preprocessor, transform_partition
+from src.utils.matrices import estimate_dense_bytes
 
 
 @pytest.mark.parametrize("policy", ["standard_sparse", "max_abs", "none", "passthrough_upstream_normalized"])

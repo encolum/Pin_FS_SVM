@@ -10,8 +10,6 @@ from scipy import sparse
 from sklearn.utils.sparsefuncs import mean_variance_axis
 from src.utils.matrices import data_hash, numeric_matrix
 
-from src.models.l1_svm import L1SVM
-
 
 @dataclass
 class CorruptionResult:
@@ -20,31 +18,24 @@ class CorruptionResult:
     manifest: dict[str, Any]
 
 
-def array_hash(X: np.ndarray, y: np.ndarray) -> str:
-    return data_hash(X, y)
-
-
 def validate_corruption_profile(condition, config):
     if condition == "clean":
         return
     if condition == "combined":
-        second = "feature_outlier" if "feature_outlier" in config else "high_margin"
         validate_corruption_profile("mixed", _required_mapping(config, "mixed"))
-        validate_corruption_profile(second, _required_mapping(config, second))
+        validate_corruption_profile(
+            "feature_outlier", _required_mapping(config, "feature_outlier")
+        )
         return
     fields = {"label_noise": ("label_flip_rate",),
               "mixed": ("label_flip_rate", "additive_rate", "multiplicative_rate", "additive_std", "multiplicative_std"),
-              "feature_outlier": ("sample_rate", "feature_rate", "scale"),
-              "high_margin": ("flip_rate", "reference_C"),
-              "high_margin_label_attack": ("flip_rate", "reference_C")}
+              "feature_outlier": ("sample_rate", "feature_rate", "scale")}
     if condition not in fields:
         raise ValueError(f"unknown condition: {condition}")
     _require_numeric(config, fields[condition])
     for key in fields[condition]:
         if key.endswith("rate"):
             _rate_count(config[key], 1)
-    if "reference_C" in fields[condition] and float(config["reference_C"]) <= 0:
-        raise ValueError("reference_C must be positive")
     if condition == "mixed" and float(config["additive_rate"]) + float(config["multiplicative_rate"]) > 1:
         raise ValueError("disjoint additive_rate + multiplicative_rate must be <= 1")
 
@@ -67,7 +58,7 @@ def apply_corruption(
     condition = condition.lower()
     config = dict(config or {})
     validate_corruption_profile(condition, config)
-    input_digest = array_hash(X, y)
+    input_digest = data_hash(X, y)
     if condition == "clean":
         return CorruptionResult(X.copy(), y.copy(), _manifest(condition, seed, config, input_digest, X, y))
     if condition == "label_noise":
@@ -80,28 +71,22 @@ def apply_corruption(
         return _mixed(X, y, seed=seed, config=config, input_digest=input_digest)
     if condition == "feature_outlier":
         return _feature_outlier(X, y, seed=seed, config=config, input_digest=input_digest)
-    if condition in {"high_margin", "high_margin_label_attack"}:
-        return _high_margin(X, y, seed=seed, config=config, input_digest=input_digest)
     if condition == "combined":
         # Freeze scale BEFORE either corruption stage, using clean training only.
-        scale_options = {"feature_scale": _training_feature_scale(X)} if "feature_outlier" in config else {}
+        feature_scale = _training_feature_scale(X)
         mixed_config = _required_mapping(config, "mixed")
         mixed = _mixed(X, y, seed=seed, config=mixed_config, input_digest=input_digest)
-        # Preserve the explicitly named legacy combined profile; new scientific
-        # configs use mixed + feature_outlier, never mislabel a label attack.
-        second = "feature_outlier" if "feature_outlier" in config else "high_margin"
-        margin_config = _required_mapping(config, second)
-        margin = (_feature_outlier if second == "feature_outlier" else _high_margin)(
+        outlier = _feature_outlier(
             mixed.X,
             mixed.y,
             seed=seed + 1,
-            config=margin_config,
-            input_digest=array_hash(mixed.X, mixed.y),
-            **scale_options,
+            config=_required_mapping(config, "feature_outlier"),
+            input_digest=data_hash(mixed.X, mixed.y),
+            feature_scale=feature_scale,
         )
-        manifest = _manifest(condition, seed, config, input_digest, margin.X, margin.y)
-        manifest["stages"] = [mixed.manifest, margin.manifest]
-        return CorruptionResult(margin.X, margin.y, manifest)
+        manifest = _manifest(condition, seed, config, input_digest, outlier.X, outlier.y)
+        manifest["stages"] = [mixed.manifest, outlier.manifest]
+        return CorruptionResult(outlier.X, outlier.y, manifest)
     raise ValueError(f"unknown condition: {condition}")
 
 
@@ -148,37 +133,6 @@ def _mixed(X: np.ndarray, y: np.ndarray, *, seed: int, config: dict[str, Any], i
         ).astype(int).tolist(),
     })
     return CorruptionResult(X_out, y_out, manifest)
-
-
-def _high_margin(X: np.ndarray, y: np.ndarray, *, seed: int, config: dict[str, Any], input_digest: str) -> CorruptionResult:
-    _require_numeric(config, ("flip_rate", "reference_C"))
-    if sparse.issparse(X):
-        from src.utils.matrices import guarded_dense
-        X_reference = guarded_dense(X, allow_densify=config.get("allow_densify", False),
-                                    max_dense_bytes=config.get("max_dense_bytes"))
-    else:
-        X_reference = X
-    count = _rate_count(config["flip_rate"], y.size)
-    reference = L1SVM(
-        C=float(config["reference_C"]),
-        time_limit=config.get("reference_time_limit"),
-        backend=str(config.get("reference_backend", "scipy")),
-        threads=int(config.get("reference_threads", 1)),
-    ).fit(X_reference, y)
-    signed_margins = y * reference.decision_function(X_reference)
-    # Stable tie-breaking by original observation index.
-    ranked = np.lexsort((np.arange(y.size), -signed_margins))
-    flipped = np.sort(ranked[:count])
-    y_out = y.copy()
-    y_out[flipped] *= -1
-    manifest = _manifest("high_margin", seed, config, input_digest, X, y_out)
-    manifest.update({
-        "flipped_label_indices": flipped.astype(int).tolist(),
-        "modified_sample_indices": flipped.astype(int).tolist(),
-        "modified_feature_indices": [],
-        "reference_solver": reference.solver_diagnostics(),
-    })
-    return CorruptionResult(X.copy(), y_out, manifest)
 
 
 def _sparse_corruption_guard(X, count, config):
@@ -290,7 +244,7 @@ def _manifest(
         "random_seed": int(seed),
         "parameters": config,
         "input_hash": input_digest,
-        "generated_output_hash": array_hash(X_out, y_out),
+        "generated_output_hash": data_hash(X_out, y_out),
         "samples": int(X_out.shape[0]),
         "features": int(X_out.shape[1]),
     }

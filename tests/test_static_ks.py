@@ -1,4 +1,3 @@
-import numpy as np
 import pytest
 
 from src.search.policies.static_ks import StaticKSPolicy
@@ -50,7 +49,6 @@ def test_static_ranking_and_bucket_order_are_stable():
         bucket_size=2,
     )
     assert policy.stable_order(features) == [1, 2, 4, 5, 0, 3]
-    assert policy.buckets(features) == [[4, 5], [0, 3]]
     assert policy.initialize_kernel(features, _search()) == {1, 2}
     assert policy.target_kernel_size(_search(iteration=0)) == 4
     assert policy.target_kernel_size(_search(iteration=1)) == 6

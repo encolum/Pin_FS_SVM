@@ -9,10 +9,7 @@ from time import perf_counter
 from typing import Any
 
 import numpy as np
-from sklearn.model_selection import StratifiedKFold
 
-from src.data.synthetic import generate_synthetic_instance, save_synthetic_instance
-from src.data.preprocessing import fit_transform_training
 from src.evaluation.metrics import classification_metrics
 from src.reporting.kernel_search_tables import (
     kernel_search_result_row,
@@ -28,11 +25,10 @@ from src.search.llm_evolution.evaluator import (
 )
 from src.search.llm_evolution.evolution import EvolutionConfig, run_evolution
 from src.search.llm_evolution.provider import EnvironmentLLMProvider, MockProvider
-from src.search.llm_evolution.replay import evolution_audit, load_replay_provider
+from src.search.llm_evolution.replay import load_replay_provider
 from src.search.llm_evolution.references import prepare_fitness_references
 from src.search.llm_evolution.schemas import PolicyCandidate
-from src.search.objectives import solver_progress_summary
-from src.search.progress import SolverProgressRecord
+from src.search.progress import SolverProgressRecord, solver_progress_summary
 from src.search.policies.frozen_verapin import FrozenVeraPinPolicy
 from src.search.policies.handcrafted_adks import ADKSWeights, HandcraftedADKSPolicy
 from src.search.policies.static_ks import StaticKSPolicy
@@ -40,26 +36,10 @@ from src.search.restricted_solver import solve_restricted_pin_fs
 from src.utils.serialization import read_json, write_json
 from src.utils.matrices import matrix_metadata
 from .benchmark_instances import (
-    CLEAN_SYNTHETIC_FIELDS, build_prepared_instances, research_split, corruption_choices,
+    SYNTHETIC_FIELDS, build_prepared_instances, corruption_choices,
     assert_research_groups_disjoint,
 )
 from .readiness import check_execution_readiness, cplex_environment_report
-
-
-_SYNTHETIC_FIELDS = {
-    "n_samples",
-    "n_features",
-    "informative_ratio",
-    "redundant_ratio",
-    "correlation_strength",
-    "positive_class_fraction",
-    "label_noise_rate",
-    "outlier_sample_rate",
-    "outlier_feature_rate",
-    "outlier_scale",
-    "feature_budget_ratio",
-    "seed",
-}
 
 
 def validate_verapin_config(config: dict[str, Any], *, command: str) -> None:
@@ -76,14 +56,13 @@ def validate_verapin_config(config: dict[str, Any], *, command: str) -> None:
     for index, instance in enumerate(instances):
         if not isinstance(instance, dict):
             raise ValueError(f"instances[{index}] must be a mapping")
-        kind = instance.get("kind", "synthetic")
+        kind = instance.get("kind")
         if kind not in {"synthetic", "benchmark"}:
             raise ValueError(f"instances[{index}].kind must be synthetic or benchmark")
-        split_field = "research_split" if "research_split" in instance else "split"
         required = (
-            {"id", split_field, *(CLEAN_SYNTHETIC_FIELDS if instance.get("generation") == "clean" else _SYNTHETIC_FIELDS)}
+            {"id", "kind", "research_split", "condition", *SYNTHETIC_FIELDS}
             if kind == "synthetic"
-            else {"id", split_field, "dataset", "condition", "feature_budget"}
+            else {"id", "kind", "research_split", "dataset", "condition", "feature_budget"}
         )
         if kind == "benchmark":
             required.add("source_partition_policy")
@@ -95,24 +74,23 @@ def validate_verapin_config(config: dict[str, Any], *, command: str) -> None:
         )
         if instance.get("id") is not None:
             instance_ids.append(str(instance["id"]))
-        if research_split(instance) not in {None, "train", "validation", "test"}:
-            raise ValueError(f"instances[{index}].split must be train, validation, or test")
+        if instance.get("research_split") not in {None, "train", "validation", "test"}:
+            raise ValueError(f"instances[{index}].research_split must be train, validation, or test")
         if instance.get("id") is not None:
             import re
             if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", str(instance["id"])):
                 raise ValueError("instance IDs must be safe filename components")
         if kind == "benchmark":
-            from src.data.benchmark_registry import read_benchmark_registry, validate_partition_policy, DEFAULT_REGISTRY_PATH
+            from src.data.benchmark_data import read_benchmark_registry, validate_partition_policy, DEFAULT_REGISTRY_PATH
             registry, _ = read_benchmark_registry(config.get("benchmark_registry", DEFAULT_REGISTRY_PATH))
             if instance["dataset"] not in registry:
                 raise ValueError("unknown benchmark dataset")
             validate_partition_policy(instance["dataset"], instance["source_partition_policy"])
             if command == "evolve-verapin" and config.get("allow_real_benchmark_evolution") is not True:
                 raise ValueError("real benchmarks are held out from evolution unless explicitly overridden")
-        if kind == "benchmark" or instance.get("generation") == "clean":
-            corruption_choices(config, instance)
-            if command == "hardness" and instance.get("condition", "clean") != "clean":
-                raise ValueError("initial solver hardness protocol must be clean")
+        corruption_choices(config, instance)
+        if command == "hardness" and instance["condition"] != "clean":
+            raise ValueError("initial solver hardness protocol must be clean")
     if len(instance_ids) != len(set(instance_ids)):
         raise ValueError("instance IDs must be unique")
     required_paths = [
@@ -172,14 +150,15 @@ def validate_verapin_config(config: dict[str, Any], *, command: str) -> None:
                 "frozen_policy_path",
                 "classification.outer_folds",
                 "classification.outer_seed",
+                "classification.inner_folds",
+                "classification.inner_seed",
+                "classification.parameter_grid",
+                "classification.tuning_solver.time_limit",
+                "classification.tuning_solver.mip_gap",
             ]
         )
-        if any(item.get("kind") == "benchmark" or item.get("generation") == "clean" for item in instances):
-            required_paths.extend(["classification.inner_folds", "classification.inner_seed",
-                "classification.parameter_grid", "classification.tuning_solver.time_limit",
-                "classification.tuning_solver.mip_gap"])
     unresolved.extend(path for path in required_paths if _get_path(config, path) is None)
-    splits = {research_split(instance) for instance in instances}
+    splits = {instance.get("research_split") for instance in instances}
     if command == "evolve-verapin" and "test" in splits:
         raise ValueError("evolution configuration must not contain held-out test instances")
     if command == "evaluate-verapin" and splits != {"test"}:
@@ -206,18 +185,12 @@ def validate_verapin_config(config: dict[str, Any], *, command: str) -> None:
     if not np.isfinite([config["problem"]["C"], config["problem"]["tau"], bounds["lower"], bounds["upper"],
                         solver["total_time_limit"], solver["mip_gap"]]).all():
         raise ValueError("problem and solver parameters must be finite")
-    if any(item.get("kind") == "benchmark" or item.get("generation") == "clean" for item in instances):
-        purpose = config.get("execution", {}).get("purpose", "scientific")
-        if bounds.get("author_confirmed") is not True and not (
-                purpose == "provisional_pilot" and config.get("execution", {}).get("parameters_provisional") is True):
-            raise ValueError("coefficient bounds require author approval or explicit provisional_pilot status")
+    purpose = config.get("execution", {}).get("purpose", "scientific")
+    if bounds.get("author_confirmed") is not True and not (
+            purpose == "provisional_pilot" and config.get("execution", {}).get("parameters_provisional") is True):
+        raise ValueError("coefficient bounds require author approval or explicit provisional_pilot status")
     if command == "evaluate-verapin":
-        for item in instances:
-            if item.get("kind", "synthetic") == "synthetic" and item.get("generation") != "clean":
-                if any(float(item[key]) != 0 for key in ("label_noise_rate", "outlier_sample_rate", "outlier_feature_rate", "outlier_scale")):
-                    raise ValueError("final synthetic data must use clean generation and post-split corruption")
-        if any(item.get("kind") == "benchmark" or item.get("generation") == "clean" for item in instances):
-            _validate_nested_classification(config)
+        _validate_nested_classification(config)
     if command == "evolve-verapin":
         if not {"train", "validation"}.issubset(splits):
             raise ValueError("evolution requires separate train and validation instances")
@@ -249,16 +222,6 @@ def validate_verapin_config(config: dict[str, Any], *, command: str) -> None:
     if command in {"adks", "evolve-verapin", "evaluate-verapin"}:
         _adks_policy(config)
     if command == "evaluate-verapin":
-        outer_folds = config["classification"]["outer_folds"]
-        outer_seed = config["classification"]["outer_seed"]
-        if (
-            isinstance(outer_folds, bool)
-            or int(outer_folds) != outer_folds
-            or int(outer_folds) < 2
-        ):
-            raise ValueError("classification.outer_folds must be an integer at least 2")
-        if isinstance(outer_seed, bool) or int(outer_seed) != outer_seed:
-            raise ValueError("classification.outer_seed must be an integer")
         verify_policy_file(config["frozen_policy_path"])
 
 
@@ -323,13 +286,21 @@ def run_static_kernel_search(config: dict[str, Any]) -> Path:
     check_execution_readiness(config, "kernel-search")
     run_dir = _create_run_dir(config, "static-ks")
     instances = _policy_instances(config, run_dir=run_dir)
-    return _run_kernel_route(
-        config,
-        run_dir=run_dir,
-        instances=instances,
-        route="static_ks",
-        policy_factory=lambda: _static_policy(config),
-    )
+    rows: list[dict[str, Any]] = []
+    iterations: list[dict[str, Any]] = []
+    details: dict[str, Any] = {}
+    for instance in instances:
+        result = _run_engine(instance, config, _static_policy(config))
+        rows.append(_kernel_route_row(result, route="static_ks", instance=instance))
+        iterations.extend(
+            {"instance_id": instance.instance_id, "route": "static_ks", **record}
+            for record in result.history
+        )
+        details[f"{instance.instance_id}:static_ks"] = _kernel_detail(result)
+    _apply_common_reference(rows, details)
+    write_kernel_search_results(run_dir, rows, iterations, details)
+    _write_run_manifest(run_dir, config, instances, routes=["static_ks"])
+    return run_dir
 
 
 def run_adks(config: dict[str, Any]) -> Path:
@@ -380,8 +351,8 @@ def run_verapin_evolution(config: dict[str, Any], *, resume_dir: str | Path | No
         adks_config=config["adks_policy"], output_path=run_dir / "fitness_references.json",
         reuse=resume_dir is not None)
     provider = _provider(config)
-    training = [instance for instance in instances if instance.split == "train"]
-    validation = [instance for instance in instances if instance.split == "validation"]
+    training = [instance for instance in instances if instance.research_split == "train"]
+    validation = [instance for instance in instances if instance.research_split == "validation"]
     fitness = config["fitness"]
     result = run_evolution(
         seed_candidates=seed_candidates,
@@ -466,41 +437,6 @@ def verify_policy_file(path: str | Path) -> dict[str, Any]:
         "schema_version": candidate.schema_version,
         "valid": True,
     }
-
-
-def replay_evolution_audit(run_dir: str | Path) -> dict[str, Any]:
-    return evolution_audit(run_dir)
-
-
-def _run_kernel_route(
-    config: dict[str, Any],
-    *,
-    run_dir: Path,
-    instances: list[PolicyInstance],
-    route: str,
-    policy_factory,
-) -> Path:
-    rows: list[dict[str, Any]] = []
-    iterations: list[dict[str, Any]] = []
-    details: dict[str, Any] = {}
-    for instance in instances:
-        result = _run_engine(instance, config, policy_factory())
-        rows.append(
-            _kernel_route_row(
-                result,
-                route=route,
-                instance=instance,
-            )
-        )
-        iterations.extend(
-            {"instance_id": instance.instance_id, "route": route, **record}
-            for record in result.history
-        )
-        details[f"{instance.instance_id}:{route}"] = _kernel_detail(result)
-    _apply_common_reference(rows, details)
-    write_kernel_search_results(run_dir, rows, iterations, details)
-    _write_run_manifest(run_dir, config, instances, routes=[route])
-    return run_dir
 
 
 def _write_validation_baseline_comparison(
@@ -750,126 +686,13 @@ def _policy_instances(
     run_dir: Path,
     outer_evaluation: bool = False,
 ) -> list[PolicyInstance]:
-    problem = config["problem"]
-    bounds = problem["coefficient_bounds"]
     result: list[PolicyInstance] = []
     for specification in config["instances"]:
-        if specification.get("kind") == "benchmark" or specification.get("generation") == "clean":
-            result.extend(build_prepared_instances(config, {"kind": "synthetic", **specification},
-                run_dir=run_dir, outer_evaluation=outer_evaluation))
-            continue
-        specification = {**specification, "split": research_split(specification)}
-        generated = generate_synthetic_instance(
-            **{name: specification[name] for name in _SYNTHETIC_FIELDS},
-            split=str(specification["split"]),
-        )
-        save_synthetic_instance(
-            generated,
-            run_dir / "instances",
-            instance_id=str(specification["id"]),
-        )
-        raw_X, y, feature_budget = generated.X, generated.y, generated.feature_budget
-        if outer_evaluation:
-            result.extend(
-                _outer_fold_instances(
-                    raw_X,
-                    y,
-                    feature_budget=feature_budget,
-                    specification=specification,
-                    problem=problem,
-                    run_dir=run_dir,
-                    outer_folds=int(config["classification"]["outer_folds"]),
-                    outer_seed=int(config["classification"]["outer_seed"]),
-                )
-            )
-        else:
-            result.append(
-                PolicyInstance(
-                    instance_id=str(specification["id"]),
-                    split=str(specification["split"]),
-                    X=raw_X,
-                    y=y,
-                    B=feature_budget,
-                    C=float(problem["C"]),
-                    tau=float(problem["tau"]),
-                    coefficient_bounds=(
-                        float(bounds["lower"]),
-                        float(bounds["upper"]),
-                    ),
-                    base_instance_id=str(specification["id"]),
-                )
-            )
+        result.extend(build_prepared_instances(
+            config, specification, run_dir=run_dir, outer_evaluation=outer_evaluation
+        ))
     assert_research_groups_disjoint(result)
     return result
-
-
-def _outer_fold_instances(
-    raw_X: np.ndarray,
-    y: np.ndarray,
-    *,
-    feature_budget: int,
-    specification: dict[str, Any],
-    problem: dict[str, Any],
-    run_dir: Path,
-    outer_folds: int,
-    outer_seed: int,
-) -> list[PolicyInstance]:
-    bounds = problem["coefficient_bounds"]
-    splitter = StratifiedKFold(
-        n_splits=outer_folds,
-        shuffle=True,
-        random_state=outer_seed,
-    )
-    base_id = str(specification["id"])
-    instances: list[PolicyInstance] = []
-    try:
-        folds = list(splitter.split(raw_X, y))
-    except ValueError as exc:
-        raise ValueError(f"instance {base_id} cannot form outer folds: {exc}") from exc
-    for outer_fold, (train_indices, test_indices) in enumerate(folds, start=1):
-        X_train, transformed, scaler = fit_transform_training(
-            raw_X[train_indices],
-            raw_X[test_indices],
-        )
-        X_test = transformed[0]
-        instance_id = f"{base_id}:outer-{outer_fold}"
-        write_json(
-            run_dir / "instances" / f"{base_id}-outer-{outer_fold}.json",
-            {
-                "instance_id": instance_id,
-                "base_instance_id": base_id,
-                "outer_fold": outer_fold,
-                "outer_folds": outer_folds,
-                "outer_seed": outer_seed,
-                "train_indices": train_indices,
-                "test_indices": test_indices,
-                "train_shape": list(X_train.shape),
-                "test_shape": list(X_test.shape),
-                "scaler_mean": scaler.mean_,
-                "scaler_scale": scaler.scale_,
-                "preprocessing": "standard_scaler_fit_on_outer_train_only",
-            },
-        )
-        instances.append(
-            PolicyInstance(
-                instance_id=instance_id,
-                split=str(specification["split"]),
-                X=X_train,
-                y=np.asarray(y[train_indices], dtype=int),
-                B=feature_budget,
-                C=float(problem["C"]),
-                tau=float(problem["tau"]),
-                coefficient_bounds=(
-                    float(bounds["lower"]),
-                    float(bounds["upper"]),
-                ),
-                X_test=X_test,
-                y_test=np.asarray(y[test_indices], dtype=int),
-                base_instance_id=base_id,
-                outer_fold=outer_fold,
-            )
-        )
-    return instances
 
 
 def _engine_config(config: dict[str, Any]) -> dict[str, Any]:
@@ -984,7 +807,6 @@ def _write_run_manifest(
                     "base_instance_id": instance.base_instance_id
                     or instance.instance_id,
                     "outer_fold": instance.outer_fold,
-                    "split": instance.split,
                     "research_split": instance.research_split,
                     "data_preparation": instance.metadata,
                     "B": instance.B, "C": instance.C, "tau": instance.tau,

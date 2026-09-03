@@ -1,7 +1,6 @@
 from dataclasses import replace
 from io import BytesIO
 import json
-import os
 import pickle
 import zipfile
 
@@ -12,15 +11,16 @@ from scipy.io import loadmat
 from sklearn.datasets import load_svmlight_file
 
 from src.data import (
-    BENCHMARK_LOADERS, RawBenchmarkDataset, load_benchmark_dataset,
+    load_benchmark_dataset,
     load_basehock, load_colon, load_gina, load_hiva, load_hill_valley, load_madelon,
 )
-from src.data._npz_labels import read_original_npz_labels
-from src.data.benchmark_loaders import DEFAULT_BENCHMARK_ROOT, sha256_file
-from src.data.benchmark_validation import (
-    BENCHMARK_EXPECTATIONS, audit_benchmark_datasets, describe_benchmark,
-    source_inventory_fingerprint, update_dataset_validation,
-    validate_description, write_validation_manifest,
+from src.data.data_loader import (
+    BENCHMARK_LOADERS, DEFAULT_BENCHMARK_ROOT, RawBenchmarkDataset,
+    read_original_npz_labels, sha256_file,
+)
+from src.data.benchmark_data import (
+    BENCHMARK_EXPECTATIONS, _describe_benchmark, _source_inventory_fingerprint,
+    _validate_description, audit_benchmark_datasets,
 )
 
 
@@ -60,7 +60,7 @@ def test_actual_partition_validation(index, audit):
 def test_saved_manifest_matches_fresh_measurements(audit):
     saved = json.loads((DEFAULT_BENCHMARK_ROOT / "manifest.json").read_text())
     assert saved["validation"] == audit
-    assert source_inventory_fingerprint(saved) == audit["source_inventory_sha256"]
+    assert _source_inventory_fingerprint(saved) == audit["source_inventory_sha256"]
     assert audit["status"] == "passed"
     assert audit["integrity"] == {"original_files": 10, "verified_files": 10, "errors": []}
     assert audit["transformations"] == []
@@ -139,7 +139,7 @@ def _raw(X, y):
 
 def test_missing_and_infinite_values_are_measured_and_rejected():
     X = np.array([[0, np.nan, np.inf], [0, 2, 0]])
-    row = describe_benchmark(_raw(X, np.array([1.0, np.nan])))
+    row = _describe_benchmark(_raw(X, np.array([1.0, np.nan])))
     assert row["X"]["missing_values"] == 1
     assert row["X"]["infinite_values"] == 1
     assert row["X"]["zero_values"] == 3
@@ -147,7 +147,7 @@ def test_missing_and_infinite_values_are_measured_and_rejected():
     assert row["y"]["missing_values"] == 1
     expected = {"shape": [2, 3], "X_dtype": "float64", "y_dtype": "float64", "storage": "dense",
                 "class_counts": [{"label": 1.0, "count": 2}]}
-    errors = validate_description(row, expected)
+    errors = _validate_description(row, expected)
     assert "X contains missing values" in errors
     assert "X contains infinite values" in errors
     assert "y contains missing values" in errors
@@ -158,7 +158,7 @@ def test_sparse_sparsity_uses_numerical_not_stored_entries_without_mutation():
     X = sparse.csr_matrix((np.array([0.0, 2.0, 3.0]), np.array([0, 1, 1]), np.array([0, 3, 3])),
                           shape=(2, 3))
     before_data, before_indices = X.data.copy(), X.indices.copy()
-    row = describe_benchmark(_raw(X, np.array([-1, 1])))
+    row = _describe_benchmark(_raw(X, np.array([-1, 1])))
     assert row["X"]["stored_sparse_entries"] == 3
     assert row["X"]["nonzero_values"] == 1
     assert row["X"]["zero_values"] == 5
@@ -168,7 +168,7 @@ def test_sparse_sparsity_uses_numerical_not_stored_entries_without_mutation():
 
 
 def test_infinite_labels_reported_separately_from_valid_classes_as_strict_json():
-    row = describe_benchmark(_raw(np.ones((2, 2)), np.array([-1.0, np.inf])))
+    row = _describe_benchmark(_raw(np.ones((2, 2)), np.array([-1.0, np.inf])))
     assert row["y"]["infinite_values"] == 1
     assert row["y"]["class_counts"] == [{"label": -1.0, "count": 1}]
     json.dumps(row, allow_nan=False)
@@ -211,7 +211,7 @@ def test_nonliteral_label_payload_rejected_without_execution(tmp_path, capsys, l
 
 
 def test_hash_mismatch_rejected_before_data_parsing(tmp_path, monkeypatch):
-    from src.data import benchmark_loaders
+    from src.data import data_loader as benchmark_loaders
 
     path = tmp_path / "BASEHOCK.mat"
     path.write_bytes(b"not a MAT file")
@@ -223,80 +223,8 @@ def test_hash_mismatch_rejected_before_data_parsing(tmp_path, monkeypatch):
         load_basehock(data_root=tmp_path)
 
 
-def _fixture_originals(root):
-    source = root / "gina.npz"
-    source.write_bytes(b"fixture original, not a real NPZ")
-    manifest = {"schema_version": 3, "representation": "original_uploads", "transformation": "none",
-                "files": [{"path": source.name, "bytes": source.stat().st_size,
-                           "sha256": sha256_file(source)}]}
-    (root / "manifest.json").write_text(json.dumps(manifest))
-    return source
-
-
-def test_writer_never_overwrites_original_manifest_even_when_requested(tmp_path, audit):
-    source = _fixture_originals(tmp_path)
-    before = sha256_file(source)
-    with pytest.raises(ValueError, match="separate JSON"):
-        write_validation_manifest(audit, tmp_path / "manifest.json", data_root=tmp_path, overwrite=True)
-    with pytest.raises(ValueError, match="separate JSON"):
-        write_validation_manifest(audit, source, data_root=tmp_path, overwrite=True)
-    assert sha256_file(source) == before
-
-
-def test_report_writer_requires_explicit_overwrite(tmp_path, audit):
-    path = tmp_path / "validation.json"
-    write_validation_manifest(audit, path)
-    with pytest.raises(FileExistsError):
-        write_validation_manifest(audit, path)
-    write_validation_manifest(audit, path, overwrite=True)
-    assert json.loads(path.read_text()) == audit
-    before = path.read_bytes()
-    with pytest.raises(ValueError):
-        write_validation_manifest({"invalid": np.nan}, path, overwrite=True)
-    assert path.read_bytes() == before
-
-
-def test_report_writer_rejects_hardlink_to_original(tmp_path, audit):
-    alias = tmp_path / "alias.json"
-    source = _fixture_originals(tmp_path)
-    before = sha256_file(source)
-    os.link(source, alias)
-    with pytest.raises(ValueError, match="separate JSON"):
-        write_validation_manifest(audit, alias, data_root=tmp_path, overwrite=True)
-    assert sha256_file(source) == before
-
-
-def test_embedded_update_changes_only_validation_block(tmp_path):
-    source = _fixture_originals(tmp_path)
-    path = tmp_path / "manifest.json"
-    before = json.loads(path.read_text())
-    source_hash = sha256_file(source)
-    report = {"scope": "original_benchmark_validation",
-              "source_inventory_sha256": source_inventory_fingerprint(before)}
-    update_dataset_validation(report, data_root=tmp_path)
-    after = json.loads(path.read_text())
-    assert after.pop("validation") == report
-    assert after == before
-    assert sha256_file(source) == source_hash
-    assert source_inventory_fingerprint(json.loads(path.read_text())) == report["source_inventory_sha256"]
-
-
-def test_embedded_update_refuses_stale_inventory_or_changed_input(tmp_path):
-    source = _fixture_originals(tmp_path)
-    path = tmp_path / "manifest.json"
-    before = path.read_bytes()
-    report = {"scope": "original_benchmark_validation", "source_inventory_sha256": "stale"}
-    with pytest.raises(ValueError, match="current source inventory"):
-        update_dataset_validation(report, data_root=tmp_path)
-    report["source_inventory_sha256"] = source_inventory_fingerprint(json.loads(path.read_text()))
-    source.write_bytes(b"changed fixture")
-    with pytest.raises(ValueError, match="checksum/size mismatch"):
-        update_dataset_validation(report, data_root=tmp_path)
-    assert path.read_bytes() == before
-
-
 def test_audit_records_bad_shape_instead_of_claiming_success(monkeypatch):
-    from src.data import benchmark_validation
+    from src.data import benchmark_data as benchmark_validation
 
     raw_loader = benchmark_validation.load_benchmark_dataset
 
@@ -309,18 +237,3 @@ def test_audit_records_bad_shape_instead_of_claiming_success(monkeypatch):
     assert report["status"] == "failed"
     assert report["summary"]["failed"] == 1
     assert any("X.shape" in error for error in report["partitions"][0]["errors"])
-
-
-def test_cli_inspection_is_read_only_and_never_runs_hardness(monkeypatch, capsys):
-    import main
-    from src.experiments import verapin
-
-    def forbidden(*args, **kwargs):
-        pytest.fail("data validation must not train or write a report by default")
-
-    monkeypatch.setattr(verapin, "run_hardness_benchmark", forbidden)
-    from src.data import benchmark_validation
-    monkeypatch.setattr(benchmark_validation, "write_validation_manifest", forbidden)
-    monkeypatch.setattr(benchmark_validation, "update_dataset_validation", forbidden)
-    assert main.main(["validate-datasets"]) == 0
-    assert "'partitions': 8" in capsys.readouterr().out

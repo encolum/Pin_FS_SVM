@@ -15,9 +15,8 @@ from src.evaluation.metrics import classification_metrics
 from src.utils.serialization import read_json, write_json
 
 from ..kernel_engine import run_kernel_search
-from ..objectives import primal_integral
 from ..policies.frozen_verapin import FrozenVeraPinPolicy
-from ..progress import SolverProgressRecord, time_to_target_gap
+from ..progress import SolverProgressRecord, primal_integral, time_to_target_gap
 from ..signals import LPRelaxationCache
 from .schemas import PolicyCandidate
 
@@ -25,7 +24,7 @@ from .schemas import PolicyCandidate
 @dataclass(frozen=True)
 class PolicyInstance:
     instance_id: str
-    split: str
+    research_split: str
     X: np.ndarray
     y: np.ndarray
     B: int
@@ -41,14 +40,10 @@ class PolicyInstance:
     fitness_horizon: float | None = None
 
     @property
-    def research_split(self):
-        return self.split  # compatibility alias; not a source partition or outer fold
-
-    @property
     def instance_hash(self) -> str:
         digest = sha256()
         digest.update(self.instance_id.encode("utf-8"))
-        digest.update(self.split.encode("utf-8"))
+        digest.update(self.research_split.encode("utf-8"))
         update_array_hash(digest, self.X)
         update_array_hash(digest, self.y)
         if self.X_test is not None:
@@ -180,7 +175,8 @@ def evaluate_policy(
     """Evaluate on exactly one declared split; lower fitness is better."""
     if not instances:
         raise ValueError("policy evaluation requires at least one instance")
-    invalid = sorted({instance.split for instance in instances if instance.split != required_split})
+    invalid = sorted({instance.research_split for instance in instances
+                      if instance.research_split != required_split})
     if invalid:
         raise ValueError(
             f"evaluation requested split {required_split!r} but received instances from {invalid}"
@@ -240,7 +236,7 @@ def evaluate_policy(
             row = {
                 "instance_id": instance.instance_id,
                 "instance_hash": instance.instance_hash,
-                "split": instance.split,
+                "research_split": instance.research_split,
                 "fitness_protocol_version": FITNESS_PROTOCOL_VERSION,
                 "reference_objective": instance.reference_objective,
                 "horizon": horizon,
@@ -268,7 +264,7 @@ def evaluate_policy(
             row = {
                 "instance_id": instance.instance_id,
                 "instance_hash": instance.instance_hash,
-                "split": instance.split,
+                "research_split": instance.research_split,
                 "fitness_protocol_version": FITNESS_PROTOCOL_VERSION,
                 "reference_objective": instance.reference_objective,
                 "horizon": horizon,

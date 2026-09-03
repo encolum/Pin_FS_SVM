@@ -35,15 +35,6 @@ def test_missing_scientific_parameters_fail_loudly():
         apply_corruption(X, y, "mixed", seed=1, config={})
 
 
-def test_high_margin_uses_only_passed_partition_and_is_deterministic():
-    X, y = synthetic_data()
-    config = {"flip_rate": 0.2, "reference_C": 1.0}
-    result = apply_corruption(X[5:15], y[5:15], "high_margin", seed=9, config=config)
-    assert result.manifest["samples"] == 10
-    assert len(result.manifest["flipped_label_indices"]) == 2
-    assert max(result.manifest["flipped_label_indices"]) < 10
-
-
 @pytest.mark.parametrize("as_sparse", [False, True])
 def test_mixed_masks_disjoint_and_effective_counts_match_actual_changes(as_sparse):
     X = np.array([[0., 2., 0., 4.], [5., 0., 7., 0.], [0., 8., 9., 0.], [3., 0., 0., 1.]])

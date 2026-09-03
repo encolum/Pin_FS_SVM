@@ -44,17 +44,12 @@ def _instance(split="train", instance_id="instance-a", seed=3):
         redundant_ratio=0.33,
         correlation_strength=0.9,
         positive_class_fraction=0.5,
-        label_noise_rate=0.0,
-        outlier_sample_rate=0.0,
-        outlier_feature_rate=0.0,
-        outlier_scale=0.0,
         feature_budget_ratio=0.34,
         seed=seed,
-        split=split,
     )
     return PolicyInstance(
         instance_id=instance_id,
-        split=split,
+        research_split=split,
         X=generated.X,
         y=generated.y,
         B=generated.feature_budget,
@@ -97,7 +92,7 @@ def test_duplicate_policy_evaluations_are_cached(tmp_path):
     assert first.failure_rate == 0.0
     assert cache.misses == 1
     assert cache.hits == 1
-    assert first.per_instance[0]["split"] == "train"
+    assert first.per_instance[0]["research_split"] == "train"
 
 
 def test_policy_evaluator_rejects_cross_split_leakage(tmp_path):

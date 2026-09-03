@@ -8,7 +8,7 @@ from src.search import (
     time_to_target_gap,
     validate_progress_trajectory,
 )
-from src.search.objectives import primal_integral
+from src.search.progress import primal_integral
 
 
 def test_progress_helpers_find_incumbent_and_target_gap_times():

@@ -68,8 +68,6 @@
       "use_fisher": true,
       "use_mutual_information": false,
       "use_correlation": false,
-      "use_l1": false,
-      "use_pin": false,
       "use_lp": true,
       "lp_backend": "cplex",
       "lp_time_limit": 10,

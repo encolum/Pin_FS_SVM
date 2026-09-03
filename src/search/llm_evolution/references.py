@@ -30,7 +30,8 @@ def prepare_fitness_references(instances, *, solver_config, adks_config, output_
     horizon = float(solver_config["total_time_limit"])
     if not np.isfinite(horizon) or horizon <= 0:
         raise ValueError("reference budget must be finite and positive")
-    if not instances or any(instance.split not in {"train", "validation"} for instance in instances):
+    if not instances or any(instance.research_split not in {"train", "validation"}
+                            for instance in instances):
         raise ValueError("fitness references accept only research train/validation instances")
     if len({instance.instance_id for instance in instances}) != len(instances):
         raise ValueError("fitness reference instance IDs must be unique")

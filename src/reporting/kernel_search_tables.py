@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from src.search.objectives import solver_progress_summary
+from src.search.progress import solver_progress_summary
 from src.search.progress import SolverProgressRecord
 from src.search.states import KernelSearchResult
 from src.utils.serialization import write_csv, write_json

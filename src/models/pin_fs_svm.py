@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
 from .base import (
-    BaseLinearClassifier,
+    SolverDiagnostics,
     validate_coefficient_bounds,
     validate_positive,
     validate_training_data,
 )
 from .cplex_backend import validate_backend
+from src.utils.matrices import numeric_matrix
 
 
-class PinFSSVM(BaseLinearClassifier):
+class PinFSSVM:
     def __init__(
         self,
         B: int,
@@ -27,7 +30,6 @@ class PinFSSVM(BaseLinearClassifier):
         backend: str = "scipy",
         threads: int = 1,
     ) -> None:
-        super().__init__()
         if isinstance(B, bool) or int(B) != B or B < 1:
             raise ValueError("B must be a positive integer")
         self.B = int(B)
@@ -40,18 +42,18 @@ class PinFSSVM(BaseLinearClassifier):
         self.requested_mip_gap = mip_gap
         self.backend = validate_backend(backend)
         self.threads = int(threads)
+        self.w_: np.ndarray | None = None
+        self.b_: float | None = None
+        self.diagnostics_: SolverDiagnostics | None = None
         self.z_: np.ndarray | None = None
         self.xi_: np.ndarray | None = None
         self.v_: np.ndarray | None = None
-        self.progress_: list[object] = []
-        self.mip_start_status_: str | None = None
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "PinFSSVM":
         # Imported lazily so ``src.search`` can also be used as a top-level public API.
         from src.search.restricted_solver import solve_restricted_pin_fs
 
         X, y = validate_training_data(X, y)
-        self._start_fit()
         _, n = X.shape
         if self.B > n:
             raise ValueError(f"B={self.B} exceeds the number of features ({n})")
@@ -72,14 +74,25 @@ class PinFSSVM(BaseLinearClassifier):
         self.z_ = result.z
         self.xi_ = result.xi
         self.v_ = result.v
-        self.progress_ = result.progress
-        self.mip_start_status_ = result.mip_start_status
-        self._finish_fit(
-            result.coefficients,
-            result.intercept,
-            result.diagnostics,
-        )
+        self.w_ = np.asarray(result.coefficients, dtype=float)
+        self.b_ = float(result.intercept)
+        self.diagnostics_ = result.diagnostics
         return self
+
+    def decision_function(self, X: np.ndarray) -> np.ndarray:
+        if self.w_ is None or self.b_ is None:
+            raise ValueError("model is not fitted")
+        X = numeric_matrix(X)
+        if X.shape[1] != self.w_.shape[0]:
+            raise ValueError("X has an incompatible feature dimension")
+        return X @ self.w_ + self.b_
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """Return only {-1, +1}; a zero decision score belongs to +1."""
+        return np.where(self.decision_function(X) >= 0.0, 1, -1).astype(int)
+
+    def solver_diagnostics(self) -> dict[str, Any]:
+        return self.diagnostics_.to_dict() if self.diagnostics_ else {}
 
     def formulation_residuals(self, X: np.ndarray, y: np.ndarray) -> dict[str, float]:
         """Maximum violations of the manuscript constraints, useful for tests/QA."""

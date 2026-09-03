@@ -7,7 +7,7 @@ import numpy as np
 from scipy import sparse
 from sklearn.preprocessing import StandardScaler, MaxAbsScaler
 
-from src.utils.matrices import numeric_matrix, guarded_dense, estimate_dense_bytes, matrix_metadata
+from src.utils.matrices import numeric_matrix, guarded_dense, matrix_metadata
 
 
 PREPROCESSING_POLICIES = {"standard", "standard_sparse", "max_abs", "none", "passthrough_upstream_normalized"}
@@ -62,12 +62,3 @@ def transform_partition(fitted, X):
                           max_dense_bytes=fitted.metadata["max_dense_bytes"])
     output = X.copy() if fitted.transformer is None else fitted.transformer.transform(X)
     return numeric_matrix(output)
-
-
-def fit_transform_training(
-    X_train: np.ndarray,
-    *other_partitions: np.ndarray,
-) -> tuple[np.ndarray, list[np.ndarray], StandardScaler]:
-    fitted = fit_preprocessor(X_train, policy="standard")
-    return (transform_partition(fitted, X_train),
-            [transform_partition(fitted, X) for X in other_partitions], fitted.transformer)

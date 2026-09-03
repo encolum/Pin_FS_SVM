@@ -2,7 +2,6 @@ import numpy as np
 
 from src.data.synthetic import (
     generate_synthetic_instance,
-    load_synthetic_instance,
     save_synthetic_instance,
 )
 
@@ -15,13 +14,8 @@ def _generate(seed=42):
         redundant_ratio=0.2,
         correlation_strength=0.95,
         positive_class_fraction=0.35,
-        label_noise_rate=0.05,
-        outlier_sample_rate=0.0,
-        outlier_feature_rate=0.0,
-        outlier_scale=0.0,
         feature_budget_ratio=0.15,
         seed=seed,
-        split="train",
     )
 
 
@@ -46,11 +40,10 @@ def test_redundant_features_follow_recorded_informative_sources():
         assert correlation > 0.85
 
 
-def test_synthetic_parameters_and_hash_round_trip(tmp_path):
+def test_synthetic_instance_is_saved(tmp_path):
     original = _generate()
-    save_synthetic_instance(original, tmp_path, instance_id="roundtrip")
-    loaded = load_synthetic_instance(tmp_path, instance_id="roundtrip")
-    assert loaded.data_hash == original.data_hash
-    assert np.array_equal(loaded.X, original.X)
-    assert np.array_equal(loaded.y, original.y)
-    assert loaded.redundant_sources == original.redundant_sources
+    array_path, metadata_path = save_synthetic_instance(original, tmp_path, instance_id="saved")
+    with np.load(array_path, allow_pickle=False) as saved:
+        assert np.array_equal(saved["X"], original.X)
+        assert np.array_equal(saved["y"], original.y)
+    assert metadata_path.is_file()

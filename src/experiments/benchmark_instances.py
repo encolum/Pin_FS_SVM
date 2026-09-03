@@ -10,31 +10,29 @@ from time import perf_counter
 import numpy as np
 from sklearn.model_selection import StratifiedKFold
 
-from src.data.benchmark_adapter import load_solver_ready_benchmark
-from src.data.benchmark_registry import DEFAULT_REGISTRY_PATH
-from src.data.corruptions import apply_corruption, array_hash, validate_corruption_profile
+from src.data.benchmark_data import DEFAULT_REGISTRY_PATH, load_solver_ready_benchmark
+from src.data.corruptions import apply_corruption, validate_corruption_profile
 from src.data.preprocessing import fit_preprocessor, transform_partition
-from src.data.synthetic import generate_clean_synthetic_instance, save_synthetic_instance
+from src.data.synthetic import generate_synthetic_instance, save_synthetic_instance
 from src.evaluation.metrics import classification_metrics
-from src.experiments.selection import _selection_tie_key
 from src.search.llm_evolution.evaluator import PolicyInstance
 from src.search.restricted_solver import solve_restricted_pin_fs
-from src.utils.matrices import matrix_metadata
+from src.utils.matrices import data_hash, matrix_metadata
 from src.utils.serialization import write_json
 
 
-CLEAN_SYNTHETIC_FIELDS = {"n_samples", "n_features", "informative_ratio", "redundant_ratio",
+SYNTHETIC_FIELDS = {"n_samples", "n_features", "informative_ratio", "redundant_ratio",
     "correlation_strength", "positive_class_fraction", "feature_budget_ratio", "seed"}
 
 
-def research_split(spec):
-    if "split" in spec and "research_split" in spec and spec["split"] != spec["research_split"]:
-        raise ValueError("conflicting split and research_split")
-    return spec.get("research_split", spec.get("split"))
+def _selection_tie_key(parameters, mean_selected_features):
+    """Prefer sparsity, then smaller B, then deterministic parameter order."""
+    order = tuple((name, float(parameters[name])) for name in sorted(parameters))
+    return (float(mean_selected_features), int(parameters.get("B", 0)), order)
 
 
 def corruption_choices(config, spec):
-    condition = spec.get("condition", "clean")
+    condition = spec["condition"]
     if condition == "clean":
         return [(0, {})]
     section = config.get("corruption", {})
@@ -46,27 +44,25 @@ def corruption_choices(config, spec):
         raise ValueError("corruption needs unique seeds and an explicit profile mapping")
     if condition == "combined" and set(profile) != {"mixed", "feature_outlier"}:
         raise ValueError("scientific combined profile requires mixed + feature_outlier")
-    if condition == "high_margin":
-        raise ValueError("use explicit high_margin_label_attack for the optional legacy analysis")
     validate_corruption_profile(condition, profile)
     return [(seed, profile) for seed in seeds]
 
 
 def prepare_partitions(X_train, y_train, X_test, y_test, *, preprocessing, condition, seed, corruption):
-    before = None if X_test is None else array_hash(X_test, y_test)
+    before = None if X_test is None else data_hash(X_test, y_test)
     fitted = fit_preprocessor(X_train, **preprocessing)
     train = transform_partition(fitted, X_train)
     test = None if X_test is None else transform_partition(fitted, X_test)
-    clean_test = None if test is None else array_hash(test, y_test)
+    clean_test = None if test is None else data_hash(test, y_test)
     corrupted = apply_corruption(train, y_train, condition, seed=seed, config=corruption)
     if set(np.unique(corrupted.y)) != {-1, 1}:
         raise ValueError("training corruption removed one binary class")
-    if test is not None and (array_hash(X_test, y_test) != before or array_hash(test, y_test) != clean_test):
+    if test is not None and (data_hash(X_test, y_test) != before or data_hash(test, y_test) != clean_test):
         raise RuntimeError("test observations changed during training preparation")
     return corrupted.X, corrupted.y, test, {
         "preprocessing_policy": fitted.name, "preprocessing_parameters": fitted.metadata,
         "corruption_manifest": corrupted.manifest, "raw_test_hash": before,
-        "untouched_preprocessed_test_hash": clean_test, "training_hash": array_hash(corrupted.X, corrupted.y),
+        "untouched_preprocessed_test_hash": clean_test, "training_hash": data_hash(corrupted.X, corrupted.y),
         "test_unchanged_by_corruption": True, "densified": fitted.metadata["densified"],
     }
 
@@ -141,7 +137,7 @@ def select_inner_parameters(X_train, y_train, *, classification, preprocessing, 
 
 
 def build_prepared_instances(config, spec, *, run_dir, outer_evaluation=False):
-    split = research_split(spec)
+    research_split = spec["research_split"]
     base_id = spec["id"]
     holdout = None
     if spec["kind"] == "benchmark":
@@ -157,8 +153,9 @@ def build_prepared_instances(config, spec, *, run_dir, outer_evaluation=False):
                   "source_partitions": list(data.source_partitions), "warnings": list(data.warnings),
                   "adapter_metadata": data.metadata}
     else:
-        generated = generate_clean_synthetic_instance(**{name: spec[name] for name in CLEAN_SYNTHETIC_FIELDS},
-                                                       research_split=split)
+        generated = generate_synthetic_instance(
+            **{name: spec[name] for name in SYNTHETIC_FIELDS},
+        )
         save_synthetic_instance(generated, Path(run_dir) / "instances", instance_id=base_id)
         X, y, B = generated.X, generated.y, generated.feature_budget
         ids = np.array([f"{base_id}:pool:{index}" for index in range(len(y))])
@@ -168,9 +165,9 @@ def build_prepared_instances(config, spec, *, run_dir, outer_evaluation=False):
     if type(B) is not int or not 1 <= B <= X.shape[1]:
         raise ValueError("feature_budget must be an integer between 1 and the feature count")
     preprocessing = {"policy": default_policy, **config.get("preprocessing", {}), **spec.get("preprocessing", {})}
-    source.update(kind=spec["kind"], research_split=split,
+    source.update(kind=spec["kind"], research_split=research_split,
                   preprocessing_overridden=preprocessing["policy"] != default_policy,
-                  clean_source_hash=array_hash(X, y))
+                  clean_source_hash=data_hash(X, y))
     problem = config["problem"]
     bounds = (problem["coefficient_bounds"]["lower"], problem["coefficient_bounds"]["upper"])
     classification = config.get("classification", {})
@@ -184,7 +181,7 @@ def build_prepared_instances(config, spec, *, run_dir, outer_evaluation=False):
         test_y = holdout.y if outer_evaluation and holdout is not None else y[test] if len(test) else None
         test_ids = holdout.sample_ids if outer_evaluation and holdout is not None else ids[test]
         for seed, profile in corruption_choices(config, spec):
-            condition = spec.get("condition", "clean")
+            condition = spec["condition"]
             parameters = {"B": int(B), "C": float(problem["C"]), "tau": float(problem["tau"])}
             tuning = {"selection": "fixed_config", "selected_parameters": parameters}
             if outer_evaluation and "parameter_grid" in classification:
@@ -207,7 +204,8 @@ def build_prepared_instances(config, spec, *, run_dir, outer_evaluation=False):
                 holdout_reserved=holdout is not None, all_routes_share_training_data=True)
             write_json(Path(run_dir) / "instances" / f"{instance_id.replace(':', '-')}.json",
                        {"instance_id": instance_id, **metadata})
-            instances.append(PolicyInstance(instance_id=instance_id, split=split, X=train_X, y=train_y,
+            instances.append(PolicyInstance(instance_id=instance_id, research_split=research_split,
+                X=train_X, y=train_y,
                 **parameters, coefficient_bounds=bounds, X_test=prepared_test, y_test=test_y,
                 base_instance_id=base_id, outer_fold=outer_fold if outer_evaluation else None, metadata=metadata))
     return instances

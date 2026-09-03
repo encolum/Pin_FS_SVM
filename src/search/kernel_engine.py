@@ -61,8 +61,6 @@ def run_kernel_search(
     reserve = total_time_limit * float(final_refinement_fraction) if final_full_refinement else 0.0
     search_deadline = deadline - reserve
     options = dict(signal_options or {})
-    options.setdefault("use_l1", False)
-    options.setdefault("use_pin", False)
     options.setdefault("use_lp", True)
     options.setdefault("lp_backend", backend)
     options.setdefault("threads", threads)
